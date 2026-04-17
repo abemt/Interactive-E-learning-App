@@ -1,0 +1,13 @@
+fullName,email,role,className,ParentEmail
+Jelalu Almu,jelalu.almu@school.local,Student,Grade 1A,parent1@school.local
+Sara Tesfaye,sara.tesfaye@school.local,Student,Grade 1A,parent1@school.local
+Kaleb Worku,kaleb.worku@school.local,Student,Grade 1A,parent1@school.local
+Hana Tadesse,hana.tadesse@school.local,Student,Grade 8B,parent2@school.local
+Dawit Alemu,dawit.alemu@school.local,Student,Grade 8B,parent2@school.local
+Bereket Desta,bereket.desta@school.local,Student,Grade 8B,parent2@school.local
+Mahlet Girma,mahlet.girma@school.local,Student,Grade 8B,parent2@school.local
+Mr. Tadesse,tadesse.teacher@school.local,Teacher,Grade 1A,
+Ms. Almaz,almaz.teacher@school.local,Teacher,Grade 8B,
+Super Admin,admin@school.local,Admin,,
+Parent One,parent1@school.local,Parent,,
+Parent Two,parent2@school.local,Parent,,

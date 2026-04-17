@@ -1,0 +1,1 @@
+const fs = require('fs'); console.log(fs.readFileSync('ps.txt', 'utf16le'));

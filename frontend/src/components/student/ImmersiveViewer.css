@@ -1,0 +1,250 @@
+.immersive-theme-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.immersive-layer-space {
+  opacity: 0.9;
+}
+
+.immersive-space-drift {
+  position: absolute;
+  inset: -12%;
+  animation: immersive-space-pan 85s linear infinite;
+}
+
+.immersive-star {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.1) 70%);
+  opacity: var(--opacity);
+  animation:
+    immersive-star-twinkle var(--twinkle-duration) ease-in-out infinite,
+    immersive-star-float 42s linear infinite;
+  animation-delay: var(--delay), calc(var(--delay) * 0.45);
+}
+
+.immersive-layer-nature {
+  background: linear-gradient(to bottom, rgba(175, 244, 191, 0.05), rgba(20, 83, 45, 0));
+}
+
+.immersive-leaf {
+  position: absolute;
+  top: var(--start-top);
+  width: var(--leaf-size);
+  height: calc(var(--leaf-size) * 1.45);
+  border-radius: 70% 35% 70% 35%;
+  background:
+    linear-gradient(135deg, rgba(163, 230, 53, 0.85), rgba(34, 197, 94, 0.3));
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.25);
+  opacity: 0.85;
+  transform: translateX(0) rotate(0deg) scale(var(--scale));
+  animation: immersive-leaf-fall var(--duration) linear infinite;
+  animation-delay: var(--delay);
+}
+
+.immersive-leaf-left {
+  left: var(--offset);
+}
+
+.immersive-leaf-right {
+  right: var(--offset);
+}
+
+.immersive-layer-lab {
+  background: linear-gradient(to top, rgba(56, 189, 248, 0.09), rgba(255, 255, 255, 0));
+}
+
+.immersive-bubble {
+  position: absolute;
+  left: var(--x);
+  bottom: calc(-1 * var(--size));
+  width: var(--size);
+  height: var(--size);
+  border-radius: 9999px;
+  border: 1px solid rgba(191, 219, 254, 0.35);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), rgba(125, 211, 252, 0.05) 75%);
+  backdrop-filter: blur(1px);
+  animation: immersive-bubble-rise var(--duration) ease-in infinite;
+  animation-delay: var(--delay);
+}
+
+.immersive-main-heading {
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.65),
+    0 0 8px rgba(255, 255, 255, 0.08);
+}
+
+.immersive-content-shell {
+  border-radius: 1rem;
+  border: 1px solid var(--immersive-shell-border);
+  background: var(--immersive-shell-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: var(--immersive-shell-text);
+  padding: 1rem;
+}
+
+.immersive-content-shell-light {
+  --immersive-shell-bg: rgba(255, 255, 255, 0.85);
+  --immersive-shell-border: rgba(0, 0, 0, 0.16);
+  --immersive-shell-text: #000;
+  --immersive-block-bg: rgba(255, 255, 255, 0.65);
+  --immersive-block-border: rgba(0, 0, 0, 0.2);
+  --immersive-control-bg: rgba(255, 255, 255, 0.72);
+  --immersive-control-border: rgba(0, 0, 0, 0.28);
+  --immersive-control-hover: rgba(255, 255, 255, 0.92);
+}
+
+.immersive-content-shell-dark {
+  --immersive-shell-bg: rgba(0, 0, 0, 0.75);
+  --immersive-shell-border: rgba(255, 255, 255, 0.28);
+  --immersive-shell-text: #fff;
+  --immersive-block-bg: rgba(255, 255, 255, 0.08);
+  --immersive-block-border: rgba(255, 255, 255, 0.22);
+  --immersive-control-bg: rgba(255, 255, 255, 0.14);
+  --immersive-control-border: rgba(255, 255, 255, 0.35);
+  --immersive-control-hover: rgba(255, 255, 255, 0.2);
+}
+
+.immersive-content-shell p,
+.immersive-content-shell h2 {
+  color: inherit;
+}
+
+.immersive-section-heading {
+  text-shadow:
+    0 1px 1px rgba(255, 255, 255, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.immersive-content-shell-dark .immersive-section-heading {
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.immersive-content-block {
+  border-radius: 1rem;
+  border: 1px solid var(--immersive-block-border);
+  background: var(--immersive-block-bg);
+  color: inherit;
+}
+
+.immersive-control-button {
+  border: 1px solid var(--immersive-control-border);
+  background: var(--immersive-control-bg);
+  color: inherit;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.immersive-control-button:hover {
+  background: var(--immersive-control-hover);
+}
+
+.immersive-empty-media {
+  border: 1px dashed var(--immersive-block-border);
+  background: var(--immersive-block-bg);
+  color: inherit;
+  opacity: 0.9;
+}
+
+@keyframes immersive-space-pan {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-4%, -3%, 0);
+  }
+}
+
+@keyframes immersive-star-twinkle {
+  0%,
+  100% {
+    opacity: calc(var(--opacity) * 0.6);
+    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+  }
+
+  40% {
+    opacity: calc(var(--opacity) * 1.35);
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+  }
+
+  70% {
+    opacity: calc(var(--opacity) * 0.85);
+  }
+}
+
+@keyframes immersive-star-float {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-15px);
+  }
+}
+
+@keyframes immersive-leaf-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(var(--scale));
+    opacity: 0;
+  }
+
+  8% {
+    opacity: 0.75;
+  }
+
+  50% {
+    transform: translate3d(var(--drift), 56vh, 0) rotate(155deg) scale(var(--scale));
+    opacity: 0.65;
+  }
+
+  100% {
+    transform: translate3d(calc(var(--drift) * 1.5), 116vh, 0) rotate(315deg) scale(var(--scale));
+    opacity: 0;
+  }
+}
+
+@keyframes immersive-bubble-rise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.88);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.32;
+  }
+
+  55% {
+    transform: translate3d(calc(var(--drift) * 0.55), -58vh, 0) scale(1);
+    opacity: 0.42;
+  }
+
+  100% {
+    transform: translate3d(var(--drift), -118vh, 0) scale(1.08);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .immersive-space-drift,
+  .immersive-star,
+  .immersive-leaf,
+  .immersive-bubble {
+    animation: none !important;
+  }
+}
