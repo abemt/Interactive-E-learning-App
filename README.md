@@ -1,263 +1,184 @@
-# 🎓 Interactive E-Learning Platform
+# Interactive E-Learning App
 
-A comprehensive, gamified e-learning platform designed for K-12 education with role-based access for Students, Teachers, Parents, and Admins. Built with modern technologies and Docker for easy deployment.
+Interactive E-Learning App is a Docker-ready, role-based K-12 learning platform with a React frontend, an Express/Sequelize backend, and gamified student progress tracking. The current codebase includes student, teacher, parent, and admin entry points; quiz flows; content management; and foundational literacy/numeracy practice for younger learners.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-20.x-green.svg)
-![React](https://img.shields.io/badge/react-19.2-blue.svg)
-![MySQL](https://img.shields.io/badge/mysql-8.0-orange.svg)
+## What’s Included
 
-## 📋 Table of Contents
+- Student, teacher, parent, and admin role routing.
+- Quiz engine and quiz results flow with XP/progress support.
+- Student dashboard with quick practice for Fidel and numeracy for Grades 1 and 2.
+- Immersive lesson viewer with themed backgrounds.
+- Backend APIs for auth, content, quizzes, gamification, and admin workflows.
+- MySQL migrations and Docker Compose orchestration.
 
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [API Documentation](#api-documentation)
-- [Gamification System](#gamification-system)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-
-## ✨ Features
-
-### 🎮 Gamification Engine (Sprint 2)
-- **Automatic XP System**: Dynamic experience point calculation based on quiz scores
-- **Progressive Leveling**: 6-tier level system (Novice → Master)
-- **Achievement Badges**: Auto-generated badges for course completion, mastery, and perfect scores
-- **Leaderboards**: Competitive rankings per module
-- **Progress Tracking**: Real-time completion percentage and activity tracking
-
-### 👥 Role-Based Access Control
-- **Students**: Complete courses, earn XP, collect badges, track progress
-- **Teachers**: Create courses with auto-gamification, manage content, view analytics
-- **Parents**: Monitor child's progress and achievements
-- **Admins**: System management, bulk uploads, user administration
-
-### 📚 Content Management
-- **Module System**: Organize courses into structured learning paths
-- **Content Types**: Support for Videos, Articles, Quizzes, and Assignments
-- **Bulk Upload**: Excel/CSV import for quick content creation
-- **Sequenced Learning**: Ordered content delivery for structured learning
-
-### 🎨 Modern UI/UX
-- **Child-Centric Design**: Vibrant color palette (Blue, Yellow, Green)
-- **Responsive Layout**: Mobile-first design with fluid grids
-- **WCAG AA Compliant**: Accessible for all learners
-- **Nunito Font**: Clean, friendly typography
-
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Backend
-- **Runtime**: Node.js 20.x
-- **Framework**: Express.js
-- **Database**: MySQL 8.0
-- **ORM**: Sequelize
-- **Authentication**: JWT (JSON Web Tokens)
-- **File Upload**: Multer
-- **Password Hashing**: bcryptjs
+
+- Node.js
+- Express.js
+- Sequelize
+- MySQL
+- JWT authentication
+- Multer file uploads
 
 ### Frontend
-- **Framework**: React 19.2
-- **Build Tool**: Vite 8.x
-- **Styling**: Tailwind CSS 3.4
-- **State Management**: React Hooks
-- **HTTP Client**: Fetch API / Axios
+
+- React
+- Vite
+- Tailwind CSS
+- React Router
 
 ### DevOps
-- **Containerization**: Docker & Docker Compose
-- **Database Migrations**: Sequelize CLI
-- **Development**: Hot-reload for both frontend and backend
-- **Logging**: Morgan (HTTP request logger)
 
-## 🏗 Architecture
+- Docker
+- Docker Compose
+- Sequelize migrations
 
+## Repository Layout
+
+```text
+backend/
+  src/
+    Controllers/
+    Middleware/
+    Routes/
+    Services/
+    config/
+    database/
+    models/
+    app.js
+    server.js
+frontend/
+  src/
+    components/
+    services/
+    App.jsx
+    main.jsx
+    index.css
+  public/
+docker-compose.yml
+README.md
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Docker Compose                        │
-│                                                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │   MySQL     │  │   Backend   │  │  Frontend   │     │
-│  │   Port:     │◄─┤   Port:     │◄─┤   Port:     │     │
-│  │   3306      │  │   5000      │  │   3000      │     │
-│  └─────────────┘  └─────────────┘  └─────────────┘     │
-│         │                 │                 │            │
-│         │                 │                 │            │
-│    [Persistent        [Hot          [Hot Reload]        │
-│     Volume]          Reload]                             │
-└─────────────────────────────────────────────────────────┘
-```
 
-### Database Schema
+## Key Features
 
-**Core Tables:**
-- `Users` - User authentication and profiles
-- `Classes` - Course classes/groups
-- `ContentModules` - Course modules
-- `ContentItems` - Individual learning content
-- `ScoreLogs` - Quiz/assignment scores
+### Student Experience
 
-**Gamification Tables:**
-- `UserProgress` - XP, levels, completion tracking
-- `XPTransactions` - XP earning logs
-- `LevelDefinitions` - Level thresholds per module
-- `BadgeDefinitions` - Badge templates
-- `Badges` - User badge awards
+- Personalized dashboard with progress, XP, level, badges, and leaderboard context.
+- Quick Practice entry points for Fidel and numeracy on Grades 1 and 2.
+- Fidel learning grid with pronunciation playback and fallback speech synthesis.
+- Numeracy grid for numbers 1-20 with Amharic and English labels.
+- Quiz completion flow that leads into a dedicated results/feedback screen.
 
-## 🚀 Getting Started
+### Teacher Experience
+
+- Create and manage content modules.
+- Build quizzes and learning content.
+- View class analytics and content progress.
+- Use themed immersive lesson content.
+
+### Parent and Admin Experience
+
+- Parent dashboard for learner progress visibility.
+- Admin tooling for user and content administration.
+- Bulk upload support in the backend.
+
+### Gamification
+
+- XP awards for quiz completion and performance.
+- Progress tracking by module.
+- Auto-generated levels and badges for modules.
+- Leaderboard and badge retrieval endpoints.
+
+## Getting Started
 
 ### Prerequisites
 
-- **Docker Desktop** installed and running
-- **Git** for version control
-- **Node.js 20.x** (optional, for local development)
-- **MySQL 8.0** (optional, for local development)
+- Docker Desktop
+- Docker Compose
+- Node.js 20+ if you want to run frontend/backend outside Docker
+- MySQL 8+ if you are not using the containerized database
 
-### Installation
+### Run With Docker
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/abemt/Interactive-E-learning-App.git
-   cd Interactive-E-learning-App
-   ```
+1. Start the stack.
 
-2. **Start all services with Docker**
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Run database migrations**
-   ```bash
-   docker-compose exec backend npm run migrate
-   ```
-
-4. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
-   - Database: localhost:3306
-
-### Quick Start Guide
-
-#### For Teachers:
-
-1. **Login** with teacher credentials
-2. **Create a Course Module**
-   ```http
-   POST /api/content/modules
-   {
-     "classId": 1,
-     "title": "Introduction to Math",
-     "autoGenerateGamification": true
-   }
-   ```
-3. **Add Content Items** (quizzes, videos, articles)
-4. **System automatically generates**:
-   - 6 level definitions
-   - 3 achievement badges
-   - XP thresholds
-
-#### For Students:
-
-1. **Login** with student credentials
-2. **Browse available courses**
-3. **Complete quizzes** to earn XP
-4. **Level up** and **earn badges**
-5. **Track progress** on dashboard
-6. **Compete** on leaderboards
-
-## 📁 Project Structure
-
-```
-Interactive-E-learning-App/
-├── backend/
-│   ├── src/
-│   │   ├── Controllers/
-│   │   │   ├── authController.js
-│   │   │   ├── adminController.js
-│   │   │   ├── contentController.js
-│   │   │   └── gamificationController.js
-│   │   ├── Services/
-│   │   │   ├── authService.js
-│   │   │   ├── gpeService.js           # Gamification engine
-│   │   │   └── bulkUploadService.js
-│   │   ├── Models/
-│   │   │   └── index.js                # Sequelize models
-│   │   ├── Routes/
-│   │   │   ├── authRoute.js
-│   │   │   ├── contentRoute.js
-│   │   │   └── gamificationRoute.js
-│   │   ├── Middleware/
-│   │   │   └── authMiddleware.js
-│   │   ├── database/
-│   │   │   ├── migrate.js
-│   │   │   └── migrations/
-│   │   │       ├── 20260309-001-create-core-tables.js
-│   │   │       └── 20260309-002-create-gamification-tables.js
-│   │   ├── config/
-│   │   │   └── database.js
-│   │   ├── app.js
-│   │   └── server.js
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── GAMIFICATION_GUIDE.md
-│   ├── SETUP_GAMIFICATION.md
-│   └── SPRINT2_SUMMARY.md
-├── frontend/
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── App.jsx
-│   │   ├── App.css
-│   │   ├── main.jsx
-│   │   └── index.css
-│   ├── public/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   └── index.html
-├── docker-compose.yml
-└── README.md
+```bash
+docker compose up -d
 ```
 
-## 📚 API Documentation
+2. Run migrations in the backend container.
 
-### Authentication Endpoints
-
-#### Register User
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "fullName": "John Doe",
-  "email": "john@example.com",
-  "password": "securePassword123",
-  "role": "Student"
-}
+```bash
+docker compose exec backend npm run migrate
 ```
 
-#### Login
-```http
-POST /api/auth/login
-Content-Type: application/json
+3. Open the app.
 
-{
-  "email": "john@example.com",
-  "password": "securePassword123"
-}
-```
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+- MySQL: localhost:3306
 
-**Response:**
-```json
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": 1,
-    "fullName": "John Doe",
-    "email": "john@example.com",
+### Local Development
+
+If you run the services separately, start the backend and frontend from their respective directories after installing dependencies.
+
+## Common Scripts
+
+These scripts may vary slightly depending on the package.json in each workspace folder.
+
+- Backend migrations: `npm run migrate`
+- Frontend dev server: `npm run dev`
+- Frontend lint: `npm run lint`
+
+## API Surface
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+
+### Content
+
+- `GET /api/content/student/learning-path`
+- `GET /api/content/student/lessons/:lessonId`
+- `POST /api/content/modules`
+- `POST /api/content/items`
+
+### Quiz
+
+- `GET /api/quiz/render/:quizId`
+- `POST /api/quiz/answer`
+- `GET /api/quiz/results/:quizId`
+
+### Gamification
+
+- `POST /api/gamification/award-xp`
+- `POST /api/gamification/generate-course`
+- `GET /api/gamification/progress/:moduleId`
+- `GET /api/gamification/leaderboard/:moduleId`
+- `GET /api/gamification/my-badges`
+
+### Admin
+
+- Content import and user administration routes are available under `/api/admin`.
+
+## Notes on Current UI Behavior
+
+- Quick Practice is currently gated to Grades 1 and 2.
+- Fidel and numeracy pronunciation use browser fallback speech when audio files are missing.
+- Quiz results are rendered in an opaque high-contrast shell to avoid immersive lesson backgrounds bleeding through.
+
+## Troubleshooting
+
+- If backend behavior looks stale after changing controllers, restart the backend container.
+- On Windows, use `npm.cmd exec -- eslint ...` for targeted lint runs if PowerShell blocks `npx.ps1`.
+- If a quiz or lesson view looks visually wrong, check whether an immersive theme class is still being applied at the parent level.
+
+## License
+
+MIT unless otherwise noted in the repository.
     "role": "Student"
   }
 }
@@ -660,5 +581,6 @@ For support and questions:
 **Made with ❤️ for K-12 Education**
 
 Happy Learning! 🎓✨
-#   I n t e r a c t i v e - E - l e a r n i n g - A p p  
+#   I n t e r a c t i v e - E - l e a r n i n g - A p p 
+ 
  

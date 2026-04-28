@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { clearAuthSession, getAuthUser } from '../../services/authStorage';
+import FidelChart from './FidelChart';
+import NumeracyGrid from './NumeracyGrid';
 
 const ITEM_THEME = {
   Lesson: {
@@ -39,6 +41,49 @@ const flattenTrackableNodes = (terms = []) =>
       .map((node) => ({ ...node, term: term.term }))
   );
 
+const QUICK_PRACTICE_MODES = {
+  FIDEL: 'fidel',
+  NUMERACY: 'numeracy'
+};
+
+const QUICK_PRACTICE_CARDS = [
+  {
+    id: QUICK_PRACTICE_MODES.FIDEL,
+    title: 'Practice Fidel',
+    icon: '🔤',
+    description: 'Open the Amharic letter grid.',
+    cardClass: 'border-cyan-200 bg-cyan-50/70',
+    badgeClass: 'bg-white text-cyan-700 border-cyan-100'
+  },
+  {
+    id: QUICK_PRACTICE_MODES.NUMERACY,
+    title: 'Practice Numbers',
+    icon: '🔢',
+    description: 'Open the numbers 1-20 grid.',
+    cardClass: 'border-amber-200 bg-amber-50/70',
+    badgeClass: 'bg-white text-amber-700 border-amber-100'
+  }
+];
+
+function resolveStudentClassName(user, classInfo) {
+  const candidates = [
+    user?.className,
+    user?.class?.name,
+    user?.assignedClassName,
+    classInfo?.name,
+    classInfo?.className,
+    classInfo?.gradeName,
+    classInfo?.title
+  ];
+
+  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+}
+
+function hasQuickPracticeAccess(className) {
+  const normalizedClassName = String(className || '').toLowerCase();
+  return normalizedClassName.includes('grade 1') || normalizedClassName.includes('grade 2');
+}
+
 function StudentDashboardNew() {
   const navigate = useNavigate();
   const user = getAuthUser();
@@ -55,6 +100,7 @@ function StudentDashboardNew() {
   const [nextCheckpoint, setNextCheckpoint] = useState(null);
   const [completedTrackableItems, setCompletedTrackableItems] = useState(0);
   const [totalTrackableItems, setTotalTrackableItems] = useState(0);
+  const [activeQuickPractice, setActiveQuickPractice] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -115,6 +161,28 @@ function StudentDashboardNew() {
     loadDashboard();
   }, []);
 
+  useEffect(() => {
+    if (!activeQuickPractice) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setActiveQuickPractice(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeQuickPractice]);
+
   const handleLogout = () => {
     clearAuthSession();
     navigate('/login');
@@ -139,6 +207,11 @@ function StudentDashboardNew() {
     const boundedProgress = Math.max(0, Math.min(100, Number(levelProgressPercent) || 0));
     return LEVEL_RING_CIRCUMFERENCE - (boundedProgress / 100) * LEVEL_RING_CIRCUMFERENCE;
   }, [levelProgressPercent]);
+
+  const studentClassName = resolveStudentClassName(user, classInfo);
+  const hasQuickPractice = hasQuickPracticeAccess(studentClassName);
+  const activeQuickPracticeLabel =
+    activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL ? 'Practice Fidel' : 'Practice Numbers';
 
   const completionPercent = useMemo(() => {
     if (totalTrackableItems <= 0) {
@@ -165,7 +238,7 @@ function StudentDashboardNew() {
               <div className="text-lg font-bold text-slate-800">{user?.fullName || 'Student'}</div>
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <span className="rounded-lg bg-cyan-100 px-2 py-1 text-xs font-semibold text-cyan-700">Student</span>
-                <span>{classInfo?.name || 'Class Not Assigned'}</span>
+                <span>{studentClassName || 'Class Not Assigned'}</span>
               </div>
             </div>
           </div>
@@ -198,6 +271,52 @@ function StudentDashboardNew() {
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {error}
           </div>
+        )}
+
+        {hasQuickPractice && !isLoading && (
+          <section className="mb-6 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white/95 shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Quick Practice</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+                  Foundational literacy and numeracy
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                  Students in Grades 1 and 2 can jump straight into Fidel and number practice from the dashboard,
+                  without following the normal lessons path.
+                </p>
+              </div>
+              <div className="rounded-full bg-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                Available for {studentClassName || 'Grade 1-2 learners'}
+              </div>
+            </div>
+
+            <div className="grid gap-3 p-4 md:grid-cols-2">
+              {QUICK_PRACTICE_CARDS.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => setActiveQuickPractice(card.id)}
+                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${card.cardClass}`}
+                >
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl border text-2xl shadow-sm ${card.badgeClass}`}>
+                        {card.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-black text-slate-900 sm:text-2xl">{card.title}</h3>
+                        <p className="mt-1 max-w-md text-sm text-slate-600">{card.description}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 shadow-sm">
+                      Open
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
 
         {isLoading && (
@@ -470,6 +589,33 @@ function StudentDashboardNew() {
           </div>
         )}
       </div>
+
+      {activeQuickPractice && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/92 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 text-white sm:px-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-cyan-200">Quick Practice</p>
+              <h2 className="text-xl font-black sm:text-2xl">{activeQuickPracticeLabel}</h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveQuickPractice(null)}
+              className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-white">
+            {activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL ? (
+              <FidelChart onBack={() => setActiveQuickPractice(null)} />
+            ) : (
+              <NumeracyGrid onBack={() => setActiveQuickPractice(null)} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

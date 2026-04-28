@@ -2,14 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 
+const QUIZ_RESULTS_PAGE_CLASS = 'fixed inset-0 z-40 overflow-y-auto bg-slate-950 px-4 py-6 text-white sm:px-6 lg:px-8';
+const QUIZ_RESULTS_PANEL_CLASS =
+  'relative z-50 w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-slate-900 p-8 shadow-2xl shadow-black/50';
+const IMMERSIVE_THEME_CLASSES = [
+  'immersive-theme-layer',
+  'immersive-layer-space',
+  'immersive-layer-nature',
+  'immersive-layer-lab',
+  'immersive-content-shell',
+  'immersive-content-shell-light',
+  'immersive-content-shell-dark'
+];
+
 function QuizResults() {
   const navigate = useNavigate();
   const location = useLocation();
   const { quizId } = useParams();
 
-  const localStudentAnswers = Array.isArray(location.state?.studentAnswers)
-    ? location.state.studentAnswers
-    : [];
+  const localStudentAnswers = useMemo(
+    () => (Array.isArray(location.state?.studentAnswers) ? location.state.studentAnswers : []),
+    [location.state?.studentAnswers]
+  );
   const hasLocalStudentAnswers = localStudentAnswers.length > 0;
 
   const [quizResults, setQuizResults] = useState(location.state?.quizResults || null);
@@ -17,6 +31,26 @@ function QuizResults() {
   const [lessonId, setLessonId] = useState(location.state?.lessonId || null);
   const [isLoading, setIsLoading] = useState(!location.state?.quizResults && !hasLocalStudentAnswers);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const stripImmersiveThemeClasses = () => {
+      const targets = [document.body, document.documentElement, document.getElementById('root')].filter(Boolean);
+
+      targets.forEach((target) => {
+        IMMERSIVE_THEME_CLASSES.forEach((className) => target.classList.remove(className));
+      });
+
+      document.querySelectorAll('.immersive-theme-layer, .immersive-layer-space, .immersive-layer-nature, .immersive-layer-lab').forEach((element) => {
+        IMMERSIVE_THEME_CLASSES.forEach((className) => element.classList.remove(className));
+      });
+    };
+
+    stripImmersiveThemeClasses();
+
+    return () => {
+      stripImmersiveThemeClasses();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -150,11 +184,13 @@ function QuizResults() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-900 p-8 text-white">
-        <div className="mx-auto flex max-w-3xl flex-col items-center rounded-3xl border border-white/15 bg-white/10 p-10 text-center shadow-2xl backdrop-blur">
+      <div className={QUIZ_RESULTS_PAGE_CLASS}>
+        <div className="mx-auto flex min-h-full w-full max-w-4xl items-center justify-center">
+          <div className={QUIZ_RESULTS_PANEL_CLASS + ' flex flex-col items-center text-center'}>
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-cyan-300 border-t-transparent" />
           <p className="mt-4 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100/80">Loading Results</p>
           <h1 className="mt-3 text-3xl font-black">Calculating your feedback...</h1>
+          </div>
         </div>
       </div>
     );
@@ -162,18 +198,20 @@ function QuizResults() {
 
   if (error && !quizResults && !hasLocalStudentAnswers) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-900 p-8 text-white">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-white/15 bg-white/10 p-8 shadow-2xl backdrop-blur">
+      <div className={QUIZ_RESULTS_PAGE_CLASS}>
+        <div className="mx-auto flex min-h-full w-full max-w-4xl items-center justify-center">
+          <div className={QUIZ_RESULTS_PANEL_CLASS}>
           <h1 className="text-3xl font-black">Quiz Results Unavailable</h1>
           <p className="mt-3 text-sm text-red-100">{error}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => navigate('/student/dashboard')}
-              className="rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/30"
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
               Back to Dashboard
             </button>
+          </div>
           </div>
         </div>
       </div>
@@ -181,13 +219,14 @@ function QuizResults() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-900 px-6 py-8 text-white">
-      <div className="mx-auto max-w-5xl">
+    <div className={QUIZ_RESULTS_PAGE_CLASS}>
+      <div className="mx-auto flex min-h-full w-full max-w-4xl items-start justify-center">
+        <div className={QUIZ_RESULTS_PANEL_CLASS}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => navigate('/student/dashboard')}
-            className="rounded-lg bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-white/25"
+            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
           >
             ← Back to Dashboard
           </button>
@@ -195,13 +234,13 @@ function QuizResults() {
           <button
             type="button"
             onClick={handleReviewLesson}
-            className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-200"
+            className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-200"
           >
             Review Lesson
           </button>
         </div>
 
-        <div className="rounded-[2rem] border border-white/15 bg-white/10 p-8 shadow-2xl backdrop-blur">
+        <div className="rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-inner shadow-black/40">
           <div className="mb-8 text-center">
             <p className="text-xs font-bold uppercase tracking-[0.35em] text-cyan-100/70">Post-Quiz Feedback</p>
             <h1 className="mt-3 text-4xl font-black md:text-5xl">{quizTitle}</h1>
@@ -212,22 +251,22 @@ function QuizResults() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-5 text-center">
+            <div className="rounded-2xl border border-emerald-300/25 bg-emerald-950 p-5 text-center">
               <p className="text-sm font-semibold text-emerald-100/80">Correct</p>
               <p className="mt-2 text-3xl font-black text-emerald-200">{correctAnswers}</p>
             </div>
-            <div className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-5 text-center">
+            <div className="rounded-2xl border border-sky-300/25 bg-sky-950 p-5 text-center">
               <p className="text-sm font-semibold text-sky-100/80">Answered</p>
               <p className="mt-2 text-3xl font-black text-sky-200">{answeredQuestions}</p>
             </div>
-            <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-5 text-center">
+            <div className="rounded-2xl border border-cyan-300/25 bg-cyan-950 p-5 text-center">
               <p className="text-sm font-semibold text-cyan-100/80">Points Earned</p>
               <p className="mt-2 text-3xl font-black text-cyan-200">{earnedPoints}</p>
             </div>
           </div>
 
           {error && (
-            <div className="mt-6 rounded-2xl border border-red-300/30 bg-red-500/15 px-4 py-3 text-sm text-red-100">
+            <div className="mt-6 rounded-2xl border border-red-300/30 bg-red-950 px-4 py-3 text-sm text-red-100">
               {error}
             </div>
           )}
@@ -235,13 +274,13 @@ function QuizResults() {
           <div className="mt-8 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-2xl font-black">Review your mistakes</h2>
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white/75">
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-100">
                 {wrongAnswers.length} to review
               </span>
             </div>
 
             {reviewLessonIds.length > 0 && (
-              <div className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4">
+              <div className="rounded-2xl border border-cyan-300/25 bg-cyan-950 p-4">
                 <p className="text-sm font-semibold text-cyan-100/90">Recommended lessons to review</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {reviewLessonIds.map((id) => (
@@ -249,7 +288,7 @@ function QuizResults() {
                       key={id}
                       type="button"
                       onClick={() => handleReviewLesson(id)}
-                      className="rounded-lg bg-cyan-300 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-200"
+                      className="rounded-lg bg-cyan-300 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-200"
                     >
                       Review Lesson {id}
                     </button>
@@ -260,28 +299,28 @@ function QuizResults() {
 
             {wrongAnswers.length > 0 ? (
               wrongAnswers.map((question, index) => (
-                <div key={question.questionId || `${index}-${question.questionText}`} className="rounded-3xl border border-white/10 bg-slate-950/35 p-5 shadow-lg">
+                <div key={question.questionId || `${index}-${question.questionText}`} className="rounded-3xl border border-white/10 bg-slate-950 p-5 shadow-lg">
                   <p className="text-sm font-semibold uppercase tracking-widest text-cyan-200/70">Question {index + 1}</p>
                   <h3 className="mt-2 text-xl font-bold text-white">{question.questionText}</h3>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-red-300/30 bg-red-500/15 p-4">
+                    <div className="rounded-2xl border border-red-300/30 bg-red-950 p-4">
                       <p className="text-sm font-bold text-red-200">Your answer</p>
                       <p className="mt-2 text-lg font-semibold text-red-100">{question.studentAnswer}</p>
                     </div>
 
-                    <div className="rounded-2xl border border-emerald-300/30 bg-emerald-500/15 p-4">
+                    <div className="rounded-2xl border border-emerald-300/30 bg-emerald-950 p-4">
                       <p className="text-sm font-bold text-emerald-200">Correct answer</p>
                       <p className="mt-2 text-lg font-semibold text-emerald-50">{question.correctAnswer}</p>
                     </div>
                   </div>
 
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-white/60">Points awarded: {question.pointsAwarded}</p>
+                    <p className="text-sm text-slate-300">Points awarded: {question.pointsAwarded}</p>
                     <button
                       type="button"
                       onClick={() => handleReviewLesson(question.lessonId || lessonId)}
-                      className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-200"
+                      className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-cyan-200"
                     >
                       Review Lesson
                     </button>
@@ -289,13 +328,14 @@ function QuizResults() {
                 </div>
               ))
             ) : (
-              <div className="rounded-3xl border border-emerald-300/20 bg-emerald-400/10 p-8 text-center">
+              <div className="rounded-3xl border border-emerald-300/20 bg-emerald-950 p-8 text-center">
                 <p className="text-3xl font-black text-emerald-100">Perfect score</p>
                 <p className="mt-2 text-white/75">No mistakes to review. You can still revisit the lesson if you want another pass.</p>
               </div>
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

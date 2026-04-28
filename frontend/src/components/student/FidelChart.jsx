@@ -1,220 +1,229 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FIDEL_ACCENT_STYLES, FIDEL_FAMILIES } from './fidelLibrary';
+import { playPronunciationClip } from './pronunciationPlayer';
 
-/**
- * FidelChart Component
- * Interactive Ethiopian Amharic Fidel (Alphabet) learning interface
- * Grid layout matching standard Ethiopian classroom charts
- */
-function FidelChart() {
+function FidelChart({ onBack }) {
   const navigate = useNavigate();
-  // Simplified Amharic Fidel characters (Ge'ez script)
-  // In production, this would include all 33 base characters x 7 orders = 231 characters
-  const fidelData = [
-    // First row - ሀ family
-    { char: 'ሀ', pronunciation: 'hä', audio: 'ha.mp3', row: 0, col: 0 },
-    { char: 'ሁ', pronunciation: 'hu', audio: 'hu.mp3', row: 0, col: 1 },
-    { char: 'ሂ', pronunciation: 'hi', audio: 'hi.mp3', row: 0, col: 2 },
-    { char: 'ሃ', pronunciation: 'ha', audio: 'haa.mp3', row: 0, col: 3 },
-    { char: 'ሄ', pronunciation: 'he', audio: 'he.mp3', row: 0, col: 4 },
-    { char: 'ህ', pronunciation: 'h', audio: 'hh.mp3', row: 0, col: 5 },
-    { char: 'ሆ', pronunciation: 'ho', audio: 'ho.mp3', row: 0, col: 6 },
-    
-    // Second row - ለ family
-    { char: 'ለ', pronunciation: 'lä', audio: 'la.mp3', row: 1, col: 0 },
-    { char: 'ሉ', pronunciation: 'lu', audio: 'lu.mp3', row: 1, col: 1 },
-    { char: 'ሊ', pronunciation: 'li', audio: 'li.mp3', row: 1, col: 2 },
-    { char: 'ላ', pronunciation: 'la', audio: 'laa.mp3', row: 1, col: 3 },
-    { char: 'ሌ', pronunciation: 'le', audio: 'le.mp3', row: 1, col: 4 },
-    { char: 'ል', pronunciation: 'l', audio: 'll.mp3', row: 1, col: 5 },
-    { char: 'ሎ', pronunciation: 'lo', audio: 'lo.mp3', row: 1, col: 6 },
-    
-    // Third row - መ family
-    { char: 'መ', pronunciation: 'mä', audio: 'ma.mp3', row: 2, col: 0 },
-    { char: 'ሙ', pronunciation: 'mu', audio: 'mu.mp3', row: 2, col: 1 },
-    { char: 'ሚ', pronunciation: 'mi', audio: 'mi.mp3', row: 2, col: 2 },
-    { char: 'ማ', pronunciation: 'ma', audio: 'maa.mp3', row: 2, col: 3 },
-    { char: 'ሜ', pronunciation: 'me', audio: 'me.mp3', row: 2, col: 4 },
-    { char: 'ም', pronunciation: 'm', audio: 'mm.mp3', row: 2, col: 5 },
-    { char: 'ሞ', pronunciation: 'mo', audio: 'mo.mp3', row: 2, col: 6 },
-    
-    // Fourth row - ረ family
-    { char: 'ረ', pronunciation: 'rä', audio: 'ra.mp3', row: 3, col: 0 },
-    { char: 'ሩ', pronunciation: 'ru', audio: 'ru.mp3', row: 3, col: 1 },
-    { char: 'ሪ', pronunciation: 'ri', audio: 'ri.mp3', row: 3, col: 2 },
-    { char: 'ራ', pronunciation: 'ra', audio: 'raa.mp3', row: 3, col: 3 },
-    { char: 'ሬ', pronunciation: 're', audio: 're.mp3', row: 3, col: 4 },
-    { char: 'ር', pronunciation: 'r', audio: 'rr.mp3', row: 3, col: 5 },
-    { char: 'ሮ', pronunciation: 'ro', audio: 'ro.mp3', row: 3, col: 6 },
-    
-    // Fifth row - ሰ family
-    { char: 'ሰ', pronunciation: 'sä', audio: 'sa.mp3', row: 4, col: 0 },
-    { char: 'ሱ', pronunciation: 'su', audio: 'su.mp3', row: 4, col: 1 },
-    { char: 'ሲ', pronunciation: 'si', audio: 'si.mp3', row: 4, col: 2 },
-    { char: 'ሳ', pronunciation: 'sa', audio: 'saa.mp3', row: 4, col: 3 },
-    { char: 'ሴ', pronunciation: 'se', audio: 'se.mp3', row: 4, col: 4 },
-    { char: 'ስ', pronunciation: 's', audio: 'ss.mp3', row: 4, col: 5 },
-    { char: 'ሶ', pronunciation: 'so', audio: 'so.mp3', row: 4, col: 6 },
-  ];
+  const playbackRef = useRef(null);
+  const playbackTokenRef = useRef(0);
+  const [selectedLetter, setSelectedLetter] = useState(() => FIDEL_FAMILIES[0]?.letters?.[0] || null);
+  const [playingLetterId, setPlayingLetterId] = useState(null);
 
-  const [selectedChar, setSelectedChar] = useState(null);
-  const [playingAudio, setPlayingAudio] = useState(null);
-
-  const handleCharClick = (char) => {
-    setSelectedChar(char);
-    
-    // Play audio pronunciation (if available)
-    if (char.audio) {
-      // In production, this would play actual audio files
-      // For now, we'll just show the pronunciation
-      setPlayingAudio(char.char);
-      
-      // Use Web Speech API for pronunciation (fallback)
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(char.pronunciation);
-        utterance.lang = 'am-ET'; // Amharic language code
-        utterance.rate = 0.8; // Slower for learning
-        window.speechSynthesis.speak(utterance);
-      }
-      
-      // Reset playing state after animation
-      setTimeout(() => setPlayingAudio(null), 600);
+  const selectedFamily =
+    FIDEL_FAMILIES.find((family) => family.id === selectedLetter?.familyId) || FIDEL_FAMILIES[0] || null;
+  const selectedAccent = FIDEL_ACCENT_STYLES[selectedFamily?.accent] || FIDEL_ACCENT_STYLES.cyan;
+  const handleBack = () => {
+    if (typeof onBack === 'function') {
+      onBack();
+      return;
     }
+
+    navigate('/student/dashboard');
   };
 
-  const rows = 5; // Number of character families
-  const cols = 7; // 7 orders per character
+  useEffect(() => {
+    return () => {
+      playbackTokenRef.current += 1;
+
+      if (playbackRef.current) {
+        playbackRef.current.stop();
+        playbackRef.current = null;
+      }
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleLetterClick = (letter) => {
+    playbackTokenRef.current += 1;
+    const playbackToken = playbackTokenRef.current;
+
+    if (playbackRef.current) {
+      playbackRef.current.stop();
+      playbackRef.current = null;
+    }
+
+    setSelectedLetter(letter);
+    setPlayingLetterId(letter.id);
+
+    playbackRef.current = playPronunciationClip({
+      audioPath: letter.audioPath,
+      fallbackText: letter.pronunciation,
+      language: 'am-ET',
+      rate: 0.84,
+      onFinish: () => {
+        if (playbackTokenRef.current === playbackToken) {
+          setPlayingLetterId(null);
+          playbackRef.current = null;
+        }
+      }
+    });
+  };
+
+  if (!selectedLetter || !selectedFamily) {
+    return null;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-accent-50 to-success-50 p-6">      {/* Back Button */}
-      <button
-        onClick={() => navigate('/student/dashboard')}
-        className="mb-4 px-4 py-2 bg-white rounded-xl shadow-md hover:shadow-lg transition-all font-semibold text-gray-700 flex items-center gap-2"
-      >
-        ← Back to My Journey
-      </button>      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="flex items-center gap-4">
-            <div className="text-5xl">🔤</div>
-            <div className="flex-1">
-              <h1 className="text-4xl font-bold text-gray-800 mb-1">
-                Amharic Fidel Chart
-              </h1>
-              <p className="text-lg text-gray-600">
-                Click on any character to hear its pronunciation!
-              </p>
-            </div>
-            {selectedChar && (
-              <div className="bg-primary-100 rounded-xl p-4 text-center min-w-[120px]">
-                <div className="text-5xl mb-2">{selectedChar.char}</div>
-                <div className="text-xl font-bold text-primary-700">
-                  {selectedChar.pronunciation}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Fidel Grid */}
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
-          {/* Column Headers (Orders) */}
-          <div className="grid grid-cols-7 gap-2 md:gap-4 mb-4">
-            {['1st', '2nd', '3rd', '4th', '5th', '6th', '7th'].map((order, idx) => (
-              <div
-                key={idx}
-                className="text-center font-bold text-sm md:text-base text-gray-600 py-2"
-              >
-                {order}
-              </div>
-            ))}
-          </div>
-
-          {/* Character Grid */}
-          {Array.from({ length: rows }).map((_, rowIdx) => (
-            <div key={rowIdx} className="grid grid-cols-7 gap-2 md:gap-4 mb-2 md:mb-4">
-              {fidelData
-                .filter(char => char.row === rowIdx)
-                .map((char, colIdx) => (
-                  <button
-                    key={`${rowIdx}-${colIdx}`}
-                    onClick={() => handleCharClick(char)}
-                    className={`
-                      relative aspect-square rounded-2xl transition-all duration-300
-                      flex flex-col items-center justify-center
-                      text-4xl md:text-5xl lg:text-6xl font-bold
-                      shadow-lg hover:shadow-2xl
-                      ${
-                        selectedChar?.char === char.char
-                          ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white scale-110 ring-4 ring-primary-300'
-                          : 'bg-gradient-to-br from-white to-gray-50 text-gray-800 hover:scale-105 hover:bg-primary-50'
-                      }
-                      ${
-                        playingAudio === char.char
-                          ? 'animate-pulse ring-4 ring-accent-400'
-                          : ''
-                      }
-                      active:scale-95
-                      cursor-pointer
-                    `}
-                  >
-                    {/* Character */}
-                    <div className="mb-1">{char.char}</div>
-                    
-                    {/* Pronunciation hint */}
-                    <div className="text-xs md:text-sm font-normal text-gray-500 absolute bottom-2">
-                      {char.pronunciation}
-                    </div>
-                    
-                    {/* Sound icon */}
-                    <div className="absolute top-2 right-2 text-lg opacity-50">
-                      🔊
-                    </div>
-                  </button>
-                ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Instructions Card */}
-        <div className="mt-6 bg-gradient-to-r from-success-100 to-primary-100 rounded-2xl shadow-lg p-6">
-          <div className="flex items-start gap-4">
-            <div className="text-4xl">💡</div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                How to Learn the Fidel
-              </h3>
-              <ul className="text-gray-700 space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="text-primary-600 font-bold">1.</span>
-                  <span>Click any character to hear how it sounds</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-primary-600 font-bold">2.</span>
-                  <span>Each row is a character family (same consonant)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-primary-600 font-bold">3.</span>
-                  <span>Each column changes the vowel sound (7 orders)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-primary-600 font-bold">4.</span>
-                  <span>Practice reading each row from left to right!</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Practice Mode Button */}
-        <div className="mt-6 text-center">
-          <button className="bg-gradient-to-r from-success-500 to-success-600 text-white px-12 py-4 rounded-xl text-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all">
-            🎮 Start Practice Quiz →
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl space-y-5">
+        <div className="flex items-center justify-start">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+            aria-label="Back to dashboard"
+          >
+            <span aria-hidden="true">←</span>
+            Back
           </button>
         </div>
-      </div>
+
+        <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.34em] text-slate-500">Foundational Learning</p>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border text-4xl font-black ${selectedAccent.badge}`}>
+                  {selectedLetter.glyph}
+                </div>
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">Amharic Fidel Library</h1>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
+                    The 34 core Fidel families from the Amharic syllabary. Tap any tile to hear its pronunciation.
+                    If an audio file is still missing, the browser will speak the same pronunciation aloud.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">34 families</span>
+                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">7 orders</span>
+                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Tap to hear</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`rounded-[1.75rem] border ${selectedAccent.card} bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm sm:p-6`}>
+            <p className="text-[10px] font-black uppercase tracking-[0.34em] text-slate-500">Now selected</p>
+            <div className="mt-4 flex items-start gap-4">
+              <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border text-4xl font-black ${selectedAccent.badge}`}>
+                {selectedLetter.glyph}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {selectedFamily.title}
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">{selectedLetter.pronunciation}</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Order {selectedLetter.order} in the family. Tap another tile to switch playback.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {selectedFamily.letters.map((letter) => {
+            const accentStyles = FIDEL_ACCENT_STYLES[selectedFamily.accent] || FIDEL_ACCENT_STYLES.cyan;
+            const isSelected = selectedLetter.id === letter.id;
+            const isPlaying = playingLetterId === letter.id;
+
+            return (
+              <button
+                key={letter.id}
+                type="button"
+                onClick={() => handleLetterClick(letter)}
+                aria-label={`Play pronunciation for ${letter.glyph}`}
+                className={`rounded-2xl border px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                  isSelected ? accentStyles.active : accentStyles.tile
+                } ${isPlaying ? 'ring-2 ring-slate-400 ring-offset-2' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] opacity-80">Order {letter.order}</p>
+                    <div className="mt-3 text-4xl font-black leading-none sm:text-5xl">{letter.glyph}</div>
+                  </div>
+                  <span className="text-base opacity-70">🔊</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold uppercase tracking-[0.18em] opacity-90">{letter.pronunciation}</p>
+                <p className="mt-1 text-xs opacity-75">Tap to hear</p>
+              </button>
+            );
+          })}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          {FIDEL_FAMILIES.map((family) => {
+            const accentStyles = FIDEL_ACCENT_STYLES[family.accent] || FIDEL_ACCENT_STYLES.cyan;
+
+            return (
+              <article key={family.id} className={`overflow-hidden rounded-[1.75rem] border bg-white shadow-sm ${accentStyles.card}`}>
+                <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${accentStyles.header}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl border text-2xl font-black ${accentStyles.badge}`}>
+                      {family.glyph}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 sm:text-xl">{family.title}</h3>
+                      <p className="text-xs text-slate-600">{family.description}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-600 shadow-sm">
+                    7 letters
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
+                  {family.letters.map((letter) => {
+                    const isSelected = selectedLetter.id === letter.id;
+                    const isPlaying = playingLetterId === letter.id;
+
+                    return (
+                      <button
+                        key={letter.id}
+                        type="button"
+                        onClick={() => handleLetterClick(letter)}
+                        aria-label={`Play pronunciation for ${letter.glyph}`}
+                        className={`relative rounded-xl border px-3 py-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
+                          isSelected ? accentStyles.active : accentStyles.tile
+                        } ${isPlaying ? 'ring-2 ring-slate-400 ring-offset-2' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{letter.order}</span>
+                          <span className="text-xs opacity-70">🔊</span>
+                        </div>
+                        <div className="mt-2 text-3xl font-black leading-none sm:text-4xl">{letter.glyph}</div>
+                        <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-85">
+                          {letter.pronunciation}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-slate-500">Practice ideas</p>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">Repeat and listen</h3>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+              Say the letter aloud, tap the tile, and repeat the sound with a slower rhythm.
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+              Move left to right inside each family to notice how the vowel pattern changes while the consonant stays the same.
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
