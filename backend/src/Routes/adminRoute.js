@@ -8,6 +8,7 @@ const {
   listClassrooms,
   listManagedUsers,
   resetUserCredentials,
+  deleteManagedUser,
   linkParentToStudent,
   bulkImportUsers,
   listModulesForAssignment,
@@ -96,6 +97,14 @@ router.post(
   bulkImportUsers
 );
 
+router.post(
+  "/bulk-import",
+  authenticateJWT,
+  authorizeRoles("Admin"),
+  upload.single("file"),
+  bulkImportUsers
+);
+
 router.get(
   "/users",
   authenticateJWT,
@@ -108,6 +117,13 @@ router.put(
   authenticateJWT,
   authorizeRoles("Admin"),
   resetUserCredentials
+);
+
+router.delete(
+  "/users/:userId",
+  authenticateJWT,
+  authorizeRoles("Admin"),
+  deleteManagedUser
 );
 
 router.post(

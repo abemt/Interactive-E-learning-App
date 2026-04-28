@@ -189,6 +189,57 @@ const calculateXPBreakdown = ({ isCorrect, basePoints, difficulty, timeTakenSeco
   };
 };
 
+const hasSuccessfulScoreLog = async ({ userId, contentItemId, transaction }) => {
+  const successfulAttempt = await ScoreLog.findOne({
+    where: {
+      userId,
+      contentItemId,
+      score: {
+        [Op.gte]: 70
+      }
+    },
+    attributes: ["id"],
+    transaction
+  });
+
+  return Boolean(successfulAttempt);
+};
+
+const hasCompletedQuestionBasedQuiz = async ({ userId, contentItemId, transaction }) => {
+  const [totalQuestions, answeredRows] = await Promise.all([
+    QuizQuestion.count({
+      where: { contentItemId },
+      transaction
+    }),
+    StudentAnswer.findAll({
+      where: { userId },
+      include: [
+        {
+          model: QuizQuestion,
+          as: "question",
+          attributes: ["id", "contentItemId"],
+          where: { contentItemId },
+          required: true
+        }
+      ],
+      attributes: ["questionId"],
+      transaction
+    })
+  ]);
+
+  if (totalQuestions <= 0) {
+    return false;
+  }
+
+  const distinctAnsweredQuestions = new Set(
+    answeredRows
+      .map((row) => Number(row.questionId))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  ).size;
+
+  return distinctAnsweredQuestions >= totalQuestions;
+};
+
 const processQuizSubmissionAtomic = async ({
   userId,
   questionId,
@@ -239,8 +290,27 @@ const processQuizSubmissionAtomic = async ({
     const isCorrect =
       normalizedStudentAnswer.toLowerCase() === normalizedCorrectAnswer.toLowerCase();
 
+    const [alreadyCorrectOnQuestion, alreadyCompletedQuiz] = await Promise.all([
+      StudentAnswer.findOne({
+        where: {
+          userId,
+          questionId: question.id,
+          isCorrect: true
+        },
+        attributes: ["id"],
+        transaction,
+        lock: transaction.LOCK.UPDATE
+      }),
+      hasCompletedQuestionBasedQuiz({
+        userId,
+        contentItemId: question.contentItem.id,
+        transaction
+      })
+    ]);
+
+    const shouldBlockXp = Boolean(alreadyCorrectOnQuestion) || Boolean(alreadyCompletedQuiz);
     const xpBreakdown = calculateXPBreakdown({
-      isCorrect,
+      isCorrect: shouldBlockXp ? false : isCorrect,
       basePoints: question.points,
       difficulty,
       timeTakenSeconds
@@ -280,7 +350,6 @@ const processQuizSubmissionAtomic = async ({
 
     let totalXP = user.totalXP || 0;
     let moduleXP = null;
-
     if (xpBreakdown.xpAwarded > 0) {
       user.totalXP = totalXP + xpBreakdown.xpAwarded;
       await user.save({ transaction });
@@ -337,6 +406,7 @@ const processQuizSubmissionAtomic = async ({
       moduleXP,
       answerId: studentAnswer.id,
       questionId: question.id,
+      alreadyCompletedQuiz: shouldBlockXp,
       correctAnswer: isCorrect ? undefined : question.correctAnswer
     };
   });
@@ -393,11 +463,17 @@ const processContentItemSubmissionAtomic = async ({
     const isCorrect =
       normalizedStudentAnswer.toLowerCase() === normalizedCorrectAnswer.toLowerCase();
 
+    const alreadySuccessfulQuiz = await hasSuccessfulScoreLog({
+      userId,
+      contentItemId: contentItem.id,
+      transaction
+    });
+
     const payloadDifficulty = difficulty || quizPayload.difficulty || "medium";
     const payloadPoints = Number(quizPayload.points);
 
     const xpBreakdown = calculateXPBreakdown({
-      isCorrect,
+      isCorrect: alreadySuccessfulQuiz ? false : isCorrect,
       basePoints: Number.isFinite(payloadPoints) && payloadPoints > 0 ? payloadPoints : 10,
       difficulty: payloadDifficulty,
       timeTakenSeconds
@@ -425,7 +501,6 @@ const processContentItemSubmissionAtomic = async ({
 
     let totalXP = user.totalXP || 0;
     let moduleXP = null;
-
     if (xpBreakdown.xpAwarded > 0) {
       user.totalXP = totalXP + xpBreakdown.xpAwarded;
       await user.save({ transaction });
@@ -484,6 +559,7 @@ const processContentItemSubmissionAtomic = async ({
       answerId: null,
       questionId: null,
       contentItemId: contentItem.id,
+      alreadyCompletedQuiz: Boolean(alreadySuccessfulQuiz),
       correctAnswer: isCorrect ? undefined : normalizedCorrectAnswer
     };
   });
@@ -1123,15 +1199,23 @@ class QuizController {
             attemptTimestamp
           });
 
+      const isRetakeNoXp = Boolean(result.alreadyCompletedQuiz) && Number(result.xpAwarded) === 0;
+
       return res.status(201).json({
         success: true,
-        message: result.isCorrect ? "Correct answer!" : "Incorrect answer",
+        message: isRetakeNoXp
+          ? "Retake: No XP awarded"
+          : result.isCorrect
+          ? "Correct answer!"
+          : "Incorrect answer",
         data: {
           isCorrect: result.isCorrect,
           pointsAwarded: result.pointsAwarded,
           xpAwarded: result.xpAwarded,
+          message: isRetakeNoXp ? "Retake: No XP awarded" : undefined,
           totalXP: result.totalXP,
           moduleXP: result.moduleXP,
+          alreadyCompletedQuiz: Boolean(result.alreadyCompletedQuiz),
           xpBreakdown: result.xpBreakdown,
           contentItemId: result.contentItemId,
           correctAnswer: result.correctAnswer

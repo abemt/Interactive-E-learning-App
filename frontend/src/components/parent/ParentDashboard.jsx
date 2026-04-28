@@ -1,7 +1,57 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import apiClient from '../../services/apiClient'
+import { clearAuthSession } from '../../services/authStorage'
+import SubjectPerformanceChart from './SubjectPerformanceChart'
+import ParentInsightsPanel from './ParentInsightsPanel'
+
+function LevelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+      <path d="M12 3l2.6 5.27L20.5 9l-4.25 4.14L17.3 19 12 16.1 6.7 19l1.05-5.86L3.5 9l5.9-.73L12 3z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function XpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+      <path d="M4 18L10 12L14 16L20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 8h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function LoginIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function formatLastLogin(loginAt) {
+  if (!loginAt) {
+    return 'No login yet'
+  }
+
+  const parsed = new Date(loginAt)
+  if (Number.isNaN(parsed.getTime())) {
+    return 'No login yet'
+  }
+
+  return parsed.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 function ParentDashboard() {
+  const navigate = useNavigate()
   const [children, setChildren] = useState([])
   const [selectedChildId, setSelectedChildId] = useState(null)
   const [isLoadingChildren, setIsLoadingChildren] = useState(true)
@@ -71,6 +121,26 @@ function ParentDashboard() {
     [children, selectedChildId]
   )
 
+  const selectedChildKpis = useMemo(() => {
+    if (!selectedChild) {
+      return {
+        level: '--',
+        xp: '--',
+        lastLogin: 'No child selected'
+      }
+    }
+
+    const latestLogin = Array.isArray(selectedChild.recentLoginLogs)
+      ? selectedChild.recentLoginLogs[0]?.loginAt
+      : null
+
+    return {
+      level: selectedChild?.levels?.highestLevel ?? 1,
+      xp: selectedChild?.currentXP ?? 0,
+      lastLogin: formatLastLogin(latestLogin)
+    }
+  }, [selectedChild])
+
   const openModal = () => {
     setFamilyLinkCode('')
     setModalError('')
@@ -126,111 +196,159 @@ function ParentDashboard() {
     }
   }
 
+  const handleLogout = () => {
+    clearAuthSession()
+    navigate('/login')
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50 px-4 py-6 sm:px-8">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-sky-100 bg-white/90 p-5 shadow-soft sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Parent Dashboard</h1>
-            <p className="mt-1 text-gray-600">Track your linked children and add a child anytime using their family code.</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={openModal}
-            className="btn-primary w-full sm:w-auto"
-          >
-            + Add Child via Code
-          </button>
-        </div>
-
-        {childrenLoadError && (
-          <div className="alert-danger mb-5">
-            {childrenLoadError}
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft">
-          {isLoadingChildren ? (
-            <p className="text-gray-600">Loading linked children...</p>
-          ) : children.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
-              <h2 className="text-xl font-semibold text-gray-900">No linked children yet</h2>
-              <p className="mt-2 text-gray-600">Use the Add Child via Code button to link your first child.</p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-2">
-                  {children.map((child) => {
-                    const isActive = Number(child.studentId) === Number(selectedChildId)
-
-                    return (
-                      <button
-                        key={child.studentId}
-                        type="button"
-                        onClick={() => setSelectedChildId(child.studentId)}
-                        className={[
-                          'rounded-full border px-4 py-2 text-sm font-semibold transition',
-                          isActive
-                            ? 'border-primary-500 bg-primary-500 text-white'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-primary-400 hover:text-primary-600'
-                        ].join(' ')}
-                      >
-                        {child?.profile?.fullName || `Child ${child.studentId}`}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className="w-full sm:w-72">
-                  <label htmlFor="child-select" className="mb-1 block text-sm font-medium text-gray-700">
-                    Active Child
-                  </label>
-                  <select
-                    id="child-select"
-                    className="input"
-                    value={selectedChildId || ''}
-                    onChange={(event) => setSelectedChildId(Number(event.target.value))}
-                  >
-                    {children.map((child) => (
-                      <option key={child.studentId} value={child.studentId}>
-                        {child?.profile?.fullName || `Child ${child.studentId}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+    <div className="min-h-screen bg-gray-100 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="grid grid-cols-1 gap-6">
+          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-soft sm:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Family Workspace</p>
+                <h1 className="mt-2 text-3xl font-extrabold text-gray-900 sm:text-4xl">Parent Dashboard</h1>
+                <p className="mt-2 max-w-2xl text-gray-600">
+                  A unified view of your linked children, learning momentum, and latest activity.
+                </p>
               </div>
 
-              {selectedChild && (
-                <div className="rounded-xl border border-gray-200 bg-gradient-to-r from-white to-sky-50 p-5">
-                  <h3 className="text-2xl font-semibold text-gray-900">{selectedChild?.profile?.fullName}</h3>
-                  <p className="mt-1 text-sm text-gray-600">{selectedChild?.profile?.email || 'No email available'}</p>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="btn-primary w-full sm:w-auto"
+                >
+                  + Add Child via Code
+                </button>
 
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg bg-white p-4 shadow-soft">
-                      <p className="text-sm text-gray-600">Total XP</p>
-                      <p className="text-2xl font-bold text-primary-600">{selectedChild.currentXP || 0}</p>
-                    </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="btn-outline w-full border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900 sm:w-auto"
+                >
+                  Log Out
+                </button>
+              </div>
+            </div>
 
-                    <div className="rounded-lg bg-white p-4 shadow-soft">
-                      <p className="text-sm text-gray-600">Highest Level</p>
-                      <p className="text-2xl font-bold text-success-600">
-                        {selectedChild?.levels?.highestLevel || 1}
-                      </p>
-                    </div>
+            {childrenLoadError && (
+              <div className="alert-danger mt-5 mb-1">
+                {childrenLoadError}
+              </div>
+            )}
 
-                    <div className="rounded-lg bg-white p-4 shadow-soft">
-                      <p className="text-sm text-gray-600">Recent Logins</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {Array.isArray(selectedChild.recentLoginLogs) ? selectedChild.recentLoginLogs.length : 0}
-                      </p>
+            {isLoadingChildren ? (
+              <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6">
+                <p className="text-gray-600">Loading linked children...</p>
+              </div>
+            ) : children.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                <h2 className="text-xl font-semibold text-gray-900">No linked children yet</h2>
+                <p className="mt-2 text-gray-600">Use Add Child via Code to link your first child account.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Multi-Child Selector</p>
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      {children.map((child) => {
+                        const isActive = Number(child.studentId) === Number(selectedChildId)
+
+                        return (
+                          <button
+                            key={child.studentId}
+                            type="button"
+                            onClick={() => setSelectedChildId(child.studentId)}
+                            className={[
+                              'whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition',
+                              isActive
+                                ? 'border-primary-500 bg-primary-500 text-white shadow-soft'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-primary-300 hover:text-primary-700'
+                            ].join(' ')}
+                          >
+                            {child?.profile?.fullName || `Child ${child.studentId}`}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <label htmlFor="child-select" className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                      Active Child
+                    </label>
+                    <select
+                      id="child-select"
+                      className="input"
+                      value={selectedChildId || ''}
+                      onChange={(event) => setSelectedChildId(Number(event.target.value))}
+                    >
+                      {children.map((child) => (
+                        <option key={child.studentId} value={child.studentId}>
+                          {child?.profile?.fullName || `Child ${child.studentId}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              )}
-            </>
-          )}
+
+                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-gray-500">Current Level</p>
+                        <p className="mt-2 text-3xl font-extrabold text-gray-900">{selectedChildKpis.level}</p>
+                        <p className="mt-1 text-sm text-gray-500">{selectedChild?.profile?.fullName || 'No child selected'}</p>
+                      </div>
+                      <span className="rounded-xl bg-warning-50 p-2 text-warning-700">
+                        <LevelIcon />
+                      </span>
+                    </div>
+                  </article>
+
+                  <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-gray-500">Total XP</p>
+                        <p className="mt-2 text-3xl font-extrabold text-gray-900">{selectedChildKpis.xp}</p>
+                        <p className="mt-1 text-sm text-gray-500">Cumulative earned experience</p>
+                      </div>
+                      <span className="rounded-xl bg-primary-50 p-2 text-primary-700">
+                        <XpIcon />
+                      </span>
+                    </div>
+                  </article>
+
+                  <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft sm:col-span-2 xl:col-span-1">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-gray-500">Last Login</p>
+                        <p className="mt-2 text-xl font-extrabold text-gray-900">{selectedChildKpis.lastLogin}</p>
+                        <p className="mt-1 text-sm text-gray-500">Most recent platform activity</p>
+                      </div>
+                      <span className="rounded-xl bg-success-50 p-2 text-success-700">
+                        <LoginIcon />
+                      </span>
+                    </div>
+                  </article>
+                </div>
+
+                <SubjectPerformanceChart selectedChild={selectedChild} />
+                <ParentInsightsPanel selectedChild={selectedChild} />
+
+                {selectedChild && (
+                  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                    <h3 className="text-xl font-bold text-gray-900">{selectedChild.profile?.fullName}</h3>
+                    <p className="mt-1 text-sm text-gray-600">{selectedChild.profile?.email || 'No email available'}</p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
         </div>
       </div>
 

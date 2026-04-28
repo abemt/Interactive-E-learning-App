@@ -91,11 +91,14 @@ const generateUniqueUsername = async (fullName, role, email) => {
   }
 };
 
-const buildLoginEmailCandidates = (email) => {
-  const base = String(email || "").trim().toLowerCase();
-  const compact = base.replace(/\s+/g, "");
-  const aroundAtTrimmed = base.replace(/\s*@\s*/g, "@");
-  return [...new Set([base, aroundAtTrimmed, compact].filter(Boolean))];
+const buildLoginIdentifierCandidates = (identifier) => {
+  const base = String(identifier || "").trim();
+  const lowered = base.toLowerCase();
+
+  const compact = lowered.replace(/\s+/g, "");
+  const aroundAtTrimmed = lowered.replace(/\s*@\s*/g, "@");
+
+  return [...new Set([base, lowered, aroundAtTrimmed, compact].filter(Boolean))];
 };
 
 const buildJwtPayload = (user) => ({
@@ -186,24 +189,40 @@ const registerUser = async ({ fullName, email, password, role = "Student", class
  * @param {string} credentials.password - User's password
  * @returns {Promise<Object>} User info and JWT token
  */
-const loginUser = async ({ email, password }) => {
-  if (!email || !password) {
-    throw new Error("Email and password are required.");
+const loginUser = async ({ email, password, identifier, username }) => {
+  const loginIdentifier = String(identifier || email || username || "").trim();
+
+  if (!loginIdentifier || !password) {
+    throw new Error("Email/username and password are required.");
   }
 
-  const emailCandidates = buildLoginEmailCandidates(email);
+  const identifierCandidates = buildLoginIdentifierCandidates(loginIdentifier);
   let user = await User.findOne({
     where: {
-      email: {
-        [Op.in]: emailCandidates
-      }
+      [Op.or]: [
+        {
+          email: {
+            [Op.in]: identifierCandidates.map((value) => String(value).toLowerCase())
+          }
+        },
+        {
+          username: {
+            [Op.in]: identifierCandidates
+          }
+        }
+      ]
     }
   });
 
   if (!user) {
-    const compactEmail = String(email || "").trim().toLowerCase().replace(/\s+/g, "");
+    const compactIdentifier = loginIdentifier.toLowerCase().replace(/\s+/g, "");
     user = await User.findOne({
-      where: where(fn("REPLACE", col("email"), " ", ""), compactEmail)
+      where: {
+        [Op.or]: [
+          where(fn("REPLACE", fn("LOWER", col("email")), " ", ""), compactIdentifier),
+          where(fn("REPLACE", fn("LOWER", col("username")), " ", ""), compactIdentifier)
+        ]
+      }
     });
   }
 

@@ -118,8 +118,12 @@ function InteractiveBalloonGame({
     }
 
     const isCorrect = result.isCorrect === true;
-    setFeedbackState(isCorrect ? 'correct' : 'wrong');
-    playToneSequence(isCorrect ? 'correct' : 'wrong');
+    const shouldAnimateXp = result?.shouldAnimateXp !== false;
+    setFeedbackState(isCorrect && shouldAnimateXp ? 'correct' : isCorrect ? 'correctNoXp' : 'wrong');
+
+    if (!isCorrect || shouldAnimateXp) {
+      playToneSequence(isCorrect ? 'correct' : 'wrong');
+    }
 
     feedbackTimerRef.current = window.setTimeout(() => {
       feedbackTimerRef.current = null;

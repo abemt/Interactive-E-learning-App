@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
-import { clearAuthSession } from '../../services/authStorage';
+import { clearAuthSession, getAuthUser } from '../../services/authStorage';
 
 const USER_PAGE_LIMIT = 20;
 
@@ -86,6 +86,7 @@ function AdminDashboard() {
   const [isSavingCourseAssignment, setIsSavingCourseAssignment] = useState(false);
   const [isSavingTeacherAssignment, setIsSavingTeacherAssignment] = useState(false);
   const [isSavingResetCredentials, setIsSavingResetCredentials] = useState(false);
+  const [isDeletingUserId, setIsDeletingUserId] = useState(null);
 
   const [assignmentClassId, setAssignmentClassId] = useState('');
   const [selectedModuleIds, setSelectedModuleIds] = useState([]);
@@ -112,6 +113,8 @@ function AdminDashboard() {
     () => [...classes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [classes]
   );
+
+  const currentAdminId = Number(getAuthUser()?.id) || null;
 
   const selectedClass = useMemo(
     () => classes.find((item) => String(item.id) === String(assignmentClassId)) || null,
@@ -506,6 +509,41 @@ function AdminDashboard() {
     }
   };
 
+  const handleDeleteUser = async (user) => {
+    setUserError('');
+    setUserNotice('');
+
+    const confirmed = window.confirm(
+      `Delete ${user.fullName} (${user.role})? This action permanently removes the account and related records.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingUserId(user.id);
+
+    try {
+      const response = await apiClient.delete(`/admin/users/${user.id}`);
+      setUserNotice(response.data?.message || 'User deleted successfully.');
+
+      if (Number(credentialForm.userId) === Number(user.id)) {
+        setCredentialForm({ userId: null, temporaryPassword: '' });
+      }
+
+      if (users.length === 1 && userPage > 1) {
+        setUserPage((prev) => Math.max(1, prev - 1));
+      } else {
+        await loadManagedUsers();
+      }
+    } catch (error) {
+      const message = await extractApiErrorMessage(error, 'Failed to delete user.');
+      setUserError(message);
+    } finally {
+      setIsDeletingUserId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-blue-50">
       <div className="border-b border-slate-200 bg-white/90 backdrop-blur">
@@ -873,7 +911,7 @@ function AdminDashboard() {
             <p className="text-sm text-slate-500">No students, teachers, or parents found yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+              <table className="w-full table-fixed text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-600">
                     <th className="px-3 py-2">ID</th>
@@ -881,24 +919,22 @@ function AdminDashboard() {
                     <th className="px-3 py-2">Role</th>
                     <th className="px-3 py-2">Username</th>
                     <th className="px-3 py-2">Email</th>
-                    <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Assigned Class</th>
-                    <th className="px-3 py-2">Reset Credentials</th>
+                    <th className="px-3 py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((user) => (
                     <tr key={user.id} className="border-b border-slate-100 align-top">
                       <td className="px-3 py-2 font-mono text-xs text-slate-500">#{user.id}</td>
-                      <td className="px-3 py-2 font-semibold text-slate-800">{user.fullName}</td>
+                      <td className="px-3 py-2 font-semibold text-slate-800 break-words">{user.fullName}</td>
                       <td className="px-3 py-2 text-slate-600">{user.role}</td>
-                      <td className="px-3 py-2 text-slate-600">{user.username || '-'}</td>
-                      <td className="px-3 py-2 text-slate-600">{user.email}</td>
-                      <td className="px-3 py-2 text-slate-600">{user.status || 'Active'}</td>
-                      <td className="px-3 py-2 text-slate-600">{user.assignedClass || '-'}</td>
+                      <td className="px-3 py-2 text-slate-600 break-all">{user.username || '-'}</td>
+                      <td className="px-3 py-2 text-slate-600 break-all">{user.email}</td>
+                      <td className="px-3 py-2 text-slate-600 break-words">{user.assignedClass || '-'}</td>
                       <td className="px-3 py-2 text-slate-600">
                         {credentialForm.userId === user.id ? (
-                          <div className="flex min-w-64 flex-col gap-2">
+                          <div className="flex max-w-xs flex-col gap-2">
                             <input
                               type="password"
                               value={credentialForm.temporaryPassword}
@@ -911,7 +947,7 @@ function AdminDashboard() {
                               placeholder="Enter temporary password"
                               className="rounded-lg border border-slate-300 px-2 py-1.5 outline-none ring-cyan-300 focus:ring"
                             />
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => handleResetCredentials(user.id)}
@@ -927,16 +963,42 @@ function AdminDashboard() {
                               >
                                 Cancel
                               </button>
+                              {Number(user.id) !== Number(currentAdminId) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(user)}
+                                  disabled={isDeletingUserId === user.id}
+                                  className="rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isDeletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => startResetCredentials(user.id)}
-                            className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-200"
-                          >
-                            Reset Credentials
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startResetCredentials(user.id)}
+                              className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-200"
+                            >
+                              Reset
+                            </button>
+                            {Number(user.id) === Number(currentAdminId) ? (
+                              <span className="inline-block rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                                Current Admin
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={isDeletingUserId === user.id}
+                                className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isDeletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

@@ -110,6 +110,7 @@ const formatClassLabel = (classRecord) => {
 const loadCredentialSets = async (transaction) => {
   const existingUsers = await User.findAll({
     attributes: ["username", "email"],
+    paranoid: false,
     transaction,
     lock: transaction ? transaction.LOCK.UPDATE : undefined
   });
@@ -126,6 +127,32 @@ const loadCredentialSets = async (transaction) => {
         .filter(Boolean)
     )
   };
+};
+
+const applyUserReactivationFields = async ({ userId, transaction, hasIsActiveColumn, hasDeletedAtColumn }) => {
+  const assignments = [];
+  const replacements = { userId };
+
+  if (hasIsActiveColumn) {
+    assignments.push("`isActive` = :isActive");
+    replacements.isActive = true;
+  }
+
+  if (hasDeletedAtColumn) {
+    assignments.push("`deletedAt` = NULL");
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  await sequelize.query(
+    `UPDATE \`Users\` SET ${assignments.join(", ")} WHERE \`id\` = :userId`,
+    {
+      replacements,
+      transaction
+    }
+  );
 };
 
 const generateSecurePassword = () => {
@@ -656,6 +683,69 @@ const resetUserCredentials = async (req, res) => {
   }
 };
 
+const deleteManagedUser = async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    const requestingAdminId = Number(req.user?.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: "Invalid userId." });
+    }
+
+    if (!Number.isInteger(requestingAdminId) || requestingAdminId <= 0) {
+      return res.status(401).json({ message: "Unauthorized admin session." });
+    }
+
+    if (userId === requestingAdminId) {
+      return res.status(400).json({ message: "You cannot delete your own admin account." });
+    }
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "fullName", "username", "email", "role"]
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (!ALLOWED_ROLES.includes(user.role)) {
+      return res.status(400).json({ message: "This account cannot be deleted by admin." });
+    }
+
+    if (user.role === "Admin") {
+      const remainingAdminCount = await User.count({
+        where: {
+          role: "Admin",
+          id: {
+            [Op.ne]: user.id
+          }
+        }
+      });
+
+      if (remainingAdminCount < 1) {
+        return res.status(400).json({ message: "Cannot delete the last remaining admin account." });
+      }
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await user.destroy({ transaction });
+    });
+
+    return res.status(200).json({
+      message: "User deleted successfully.",
+      data: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to delete user." });
+  }
+};
+
 const linkParentToStudent = async (req, res) => {
   try {
     const parentId = Number(req.body?.parentId ?? req.body?.parent_id);
@@ -951,6 +1041,9 @@ const bulkImportUsers = async (req, res) => {
       const { usedUsernames, usedEmails } = await loadCredentialSets(transaction);
       const classCache = new Map();
       const parentAccountCache = new Map();
+      const userTableColumns = await sequelize.getQueryInterface().describeTable("Users");
+      const hasIsActiveColumn = Object.prototype.hasOwnProperty.call(userTableColumns, "isActive");
+      const hasDeletedAtColumn = Object.prototype.hasOwnProperty.call(userTableColumns, "deletedAt");
 
       const resolveParentAccount = async ({ parentEmail, studentName }) => {
         const normalizedParentEmail = normalizeEmailAddress(parentEmail);
@@ -970,6 +1063,7 @@ const bulkImportUsers = async (req, res) => {
 
         const existingParent = await User.findOne({
           where: { email: normalizedParentEmail },
+          paranoid: false,
           transaction,
           lock: transaction.LOCK.UPDATE
         });
@@ -978,6 +1072,17 @@ const bulkImportUsers = async (req, res) => {
           if (existingParent.role !== "Parent") {
             throw new Error(`ParentEmail ${normalizedParentEmail} already belongs to a ${existingParent.role} account.`);
           }
+
+          if (typeof existingParent.restore === "function" && existingParent.deletedAt) {
+            await existingParent.restore({ transaction });
+          }
+
+          await applyUserReactivationFields({
+            userId: existingParent.id,
+            transaction,
+            hasIsActiveColumn,
+            hasDeletedAtColumn
+          });
 
           parentAccountCache.set(normalizedParentEmail, {
             user: existingParent,
@@ -1044,6 +1149,12 @@ const bulkImportUsers = async (req, res) => {
         );
 
         const email = (row.email || buildDefaultEmail(username)).toLowerCase();
+        const existingUser = await User.findOne({
+          where: { email },
+          paranoid: false,
+          transaction,
+          lock: transaction.LOCK.UPDATE
+        });
         let classRecord = null;
 
         if (row.role === "Student" && row.parentEmail && row.parentEmail === email) {
@@ -1075,7 +1186,7 @@ const bulkImportUsers = async (req, res) => {
           }
         }
 
-        if (usedEmails.has(email)) {
+        if (!existingUser && usedEmails.has(email)) {
           if (row.email) {
             throw new Error(`Row ${row.line}: email ${row.email} already exists.`);
           }
@@ -1083,59 +1194,89 @@ const bulkImportUsers = async (req, res) => {
           throw new Error(`Row ${row.line}: generated email ${email} already exists.`);
         }
 
-        usedEmails.add(email);
+        if (!existingUser) {
+          usedEmails.add(email);
+        }
 
         const plainPassword = generateSecurePassword();
+        // Explicitly hash freshly generated password for both create and update paths.
         const passwordHash = await bcrypt.hash(plainPassword, 10);
-        const familyLinkCode = row.role === "Student" ? await generateUniqueFamilyLinkCode(transaction) : null;
+        const familyLinkCode = row.role === "Student"
+          ? existingUser?.familyLinkCode || await generateUniqueFamilyLinkCode(transaction)
+          : null;
 
-        const createdUser = await User.create(
-          {
-            fullName: row.fullName,
-            username,
-            email,
-            passwordHash,
-            role: row.role,
-            classId: row.role === "Student" ? classRecord?.id || null : null,
-            familyLinkCode,
-            needsPasswordChange: true
-          },
-          { transaction }
-        );
+        const userPayload = {
+          fullName: row.fullName,
+          username: existingUser?.username || username,
+          email,
+          passwordHash,
+          role: row.role,
+          classId: row.role === "Student" ? classRecord?.id || null : null,
+          familyLinkCode,
+          needsPasswordChange: true
+        };
+
+        let persistedUser;
+        if (existingUser) {
+          if (typeof existingUser.restore === "function" && existingUser.deletedAt) {
+            await existingUser.restore({ transaction });
+          }
+
+          await User.update(userPayload, {
+            where: { id: existingUser.id },
+            paranoid: false,
+            hooks: false,
+            transaction
+          });
+
+          await applyUserReactivationFields({
+            userId: existingUser.id,
+            transaction,
+            hasIsActiveColumn,
+            hasDeletedAtColumn
+          });
+
+          persistedUser = await User.findByPk(existingUser.id, {
+            paranoid: false,
+            transaction
+          });
+        } else {
+          persistedUser = await User.create(userPayload, { transaction });
+        }
 
         if (row.role === "Teacher" && classRecord) {
           await TeacherClass.findOrCreate({
             where: {
-              teacherId: createdUser.id,
+              teacherId: persistedUser.id,
               classId: classRecord.id
             },
             defaults: {
-              teacherId: createdUser.id,
+              teacherId: persistedUser.id,
               classId: classRecord.id
             },
             transaction
           });
 
           if (!classRecord.teacherId) {
-            await classRecord.update({ teacherId: createdUser.id }, { transaction });
+            await classRecord.update({ teacherId: persistedUser.id }, { transaction });
           }
         }
 
         if (row.role === "Student" && row.parentEmail) {
           const parentAccount = await resolveParentAccount({
             parentEmail: row.parentEmail,
-            studentName: createdUser.fullName
+            studentName: persistedUser.fullName
           });
 
           if (parentAccount) {
             await ParentStudentMapping.findOrCreate({
               where: {
                 parentId: parentAccount.id,
-                studentId: createdUser.id
+                studentId: persistedUser.id
               },
               defaults: {
                 parentId: parentAccount.id,
-                studentId: createdUser.id
+                studentId: persistedUser.id
               },
               transaction
             });
@@ -1143,14 +1284,15 @@ const bulkImportUsers = async (req, res) => {
         }
 
         createdCredentials.push({
-          id: createdUser.id,
-          fullName: createdUser.fullName,
-          role: createdUser.role,
-          username,
+          id: persistedUser.id,
+          fullName: persistedUser.fullName,
+          role: persistedUser.role,
+          username: persistedUser.username,
           email,
           plainPassword,
           familyLinkCode,
-          className: classRecord?.name || row.className || null
+          className: classRecord?.name || row.className || null,
+          note: existingUser ? "Existing account updated/reactivated during bulk import." : undefined
         });
       }
     });
@@ -1188,6 +1330,7 @@ module.exports = {
   listClassrooms,
   listManagedUsers,
   resetUserCredentials,
+  deleteManagedUser,
   linkParentToStudent,
   bulkImportUsers,
   listModulesForAssignment,

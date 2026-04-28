@@ -1,5 +1,16 @@
 const { Op } = require("sequelize");
-const { User, UserProgress, ParentStudentMapping, LoginLog, sequelize } = require("../models");
+const {
+  User,
+  UserProgress,
+  ParentStudentMapping,
+  LoginLog,
+  ScoreLog,
+  Badge,
+  BadgeDefinition,
+  ContentItem,
+  ContentModule,
+  sequelize
+} = require("../models");
 const { normalizeFamilyLinkCode } = require("../Services/familyLinkCodeService");
 
 const getChildren = async (req, res) => {
@@ -34,7 +45,7 @@ const getChildren = async (req, res) => {
 
     const studentIds = [...new Set(students.map((student) => Number(student.id)))];
 
-    const [progressRows, loginRows] = await Promise.all([
+    const [progressRows, loginRows, scoreRows, badgeRows] = await Promise.all([
       UserProgress.findAll({
         where: {
           userId: {
@@ -61,6 +72,44 @@ const getChildren = async (req, res) => {
         attributes: ["id", "userId", "loginAt"],
         order: [["userId", "ASC"], ["loginAt", "DESC"]],
         raw: true
+      }),
+      ScoreLog.findAll({
+        where: {
+          userId: {
+            [Op.in]: studentIds
+          }
+        },
+        attributes: ["id", "userId", "contentItemId", "score", "attemptedAt"],
+        include: [
+          {
+            model: ContentItem,
+            as: "contentItem",
+            attributes: ["id", "title", "moduleId"],
+            include: [
+              {
+                model: ContentModule,
+                as: "module",
+                attributes: ["id", "title"]
+              }
+            ]
+          }
+        ],
+        order: [["userId", "ASC"], ["attemptedAt", "DESC"]]
+      }),
+      Badge.findAll({
+        where: {
+          userId: {
+            [Op.in]: studentIds
+          }
+        },
+        include: [
+          {
+            model: BadgeDefinition,
+            as: "definition",
+            attributes: ["title", "description", "badgeType", "xpReward", "iconUrl"]
+          }
+        ],
+        order: [["userId", "ASC"], ["awardedAt", "DESC"]]
       })
     ]);
 
@@ -100,6 +149,50 @@ const getChildren = async (req, res) => {
       return acc;
     }, new Map());
 
+    const quizScoresByUserId = scoreRows.reduce((acc, row) => {
+      const userId = Number(row.userId);
+      const existing = acc.get(userId) || [];
+
+      if (existing.length < 24) {
+        const moduleTitle = row.contentItem?.module?.title || null;
+        const contentItemTitle = row.contentItem?.title || null;
+
+        existing.push({
+          id: row.id,
+          contentItemId: row.contentItemId,
+          moduleId: row.contentItem?.module?.id || row.contentItem?.moduleId || null,
+          moduleTitle: moduleTitle || contentItemTitle || "General",
+          subject: moduleTitle || contentItemTitle || "General",
+          contentItemTitle,
+          score: Number(row.score) || 0,
+          attemptedAt: row.attemptedAt
+        });
+      }
+
+      acc.set(userId, existing);
+      return acc;
+    }, new Map());
+
+    const badgesByUserId = badgeRows.reduce((acc, row) => {
+      const userId = Number(row.userId);
+      const existing = acc.get(userId) || [];
+
+      if (existing.length < 12) {
+        existing.push({
+          id: row.id,
+          title: row.definition?.title || row.title,
+          description: row.definition?.description || row.description || null,
+          badgeType: row.definition?.badgeType || "Special",
+          iconUrl: row.definition?.iconUrl || null,
+          xpReward: row.definition?.xpReward || 0,
+          awardedAt: row.awardedAt
+        });
+      }
+
+      acc.set(userId, existing);
+      return acc;
+    }, new Map());
+
     const data = students.map((student) => {
       const levelBundle = levelsByUserId.get(Number(student.id)) || {
         highestLevel: 1,
@@ -121,7 +214,9 @@ const getChildren = async (req, res) => {
           highestLevel: levelBundle.highestLevel,
           moduleLevels: levelBundle.moduleLevels
         },
-        recentLoginLogs: loginLogsByUserId.get(Number(student.id)) || []
+        recentLoginLogs: loginLogsByUserId.get(Number(student.id)) || [],
+        recentQuizScores: quizScoresByUserId.get(Number(student.id)) || [],
+        badges: badgesByUserId.get(Number(student.id)) || []
       };
     });
 

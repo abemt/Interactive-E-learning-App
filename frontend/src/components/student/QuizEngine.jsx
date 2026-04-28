@@ -232,6 +232,9 @@ function QuizEngine() {
         const submission = await submitQuizAnswer(payload);
 
         const resultData = submission?.data || {};
+        const awardedXp = Math.max(0, Number(resultData.xpAwarded) || 0);
+        const submissionMessage = String(resultData.message || submission?.message || '').trim();
+
         setStudentAnswers((prev) =>
           prev.map((entry) => {
             if (entry.attemptKey !== attemptKey) {
@@ -244,7 +247,7 @@ function QuizEngine() {
                 typeof resultData.isCorrect === 'boolean' ? resultData.isCorrect : null,
               correctAnswer: resultData.correctAnswer || null,
               pointsAwarded: Number(resultData.pointsAwarded) || 0,
-              xpAwarded: Number(resultData.xpAwarded) || 0,
+              xpAwarded: awardedXp,
               pendingSync: Boolean(submission?.pendingSync),
               answerStatus: submission?.pendingSync ? 'Pending Sync' : 'Submitted'
             };
@@ -255,13 +258,17 @@ function QuizEngine() {
           setLastSubmissionMessage('Saved offline as Pending Sync. It will sync when network returns.');
         } else {
           setLastSubmissionMessage(
-            resultData.isCorrect ? 'Correct answer. Great work!' : 'Submitted. Keep going!'
+            submissionMessage ||
+              (resultData.isCorrect ? 'Correct answer. Great work!' : 'Submitted. Keep going!')
           );
         }
 
         return {
           ok: true,
           isCorrect: resultData.isCorrect === true,
+          xpAwarded: awardedXp,
+          shouldAnimateXp: awardedXp > 0,
+          message: submissionMessage,
           pendingSync: Boolean(submission?.pendingSync)
         };
       } catch (submitError) {

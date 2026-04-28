@@ -37,7 +37,7 @@ function Login() {
 
     try {
       const normalizedEmail = normalizeLoginEmail(email);
-      const result = await loginUser({ email: normalizedEmail, password });
+      const result = await loginUser({ identifier: normalizedEmail, password });
 
       if (!result?.token || !result?.user) {
         throw new Error('Login response is missing token or user data.');
@@ -105,10 +105,10 @@ function Login() {
             ))}
           </div>
 
-          {/* Username Input */}
+          {/* Email or Username Input */}
           <div className="mb-6">
             <label className="block text-gray-600 text-sm font-semibold mb-2 uppercase tracking-wide">
-              Email
+              Email or Username
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400">
@@ -118,7 +118,7 @@ function Login() {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter email"
+                placeholder="Enter email or username"
                 required
                 className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-primary-400 focus:bg-white focus:outline-none transition-all text-gray-800 font-medium"
               />
