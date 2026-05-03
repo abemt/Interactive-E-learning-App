@@ -1505,6 +1505,32 @@ class ContentController {
       });
 
       return res.status(201).json({
+        success: true,
+        message: "Lesson created successfully",
+        lessonId: lessonItem.id,
+        data: lessonItem
+      });
+    } catch (error) {
+      if (
+        error?.message?.includes("Card") ||
+        error?.message?.includes("text content") ||
+        error?.message?.includes("image file") ||
+        error?.message?.includes("audio file")
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      console.error("Error creating lesson content item:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error creating lesson content item",
+        error: error.message
+      });
+    }
+  }
 
   /**
    * Update an immersive lesson content item.
@@ -1638,32 +1664,6 @@ class ContentController {
       return res.status(500).json({
         success: false,
         message: "Error updating lesson content item",
-        error: error.message
-      });
-    }
-  }
-        success: true,
-        message: "Lesson created successfully",
-        lessonId: lessonItem.id,
-        data: lessonItem
-      });
-    } catch (error) {
-      if (
-        error?.message?.includes("Card") ||
-        error?.message?.includes("text content") ||
-        error?.message?.includes("image file") ||
-        error?.message?.includes("audio file")
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-
-      console.error("Error creating lesson content item:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Error creating lesson content item",
         error: error.message
       });
     }
