@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getAuthToken, getAuthUser, getDashboardRouteByRole } from '../../services/authStorage';
+import { clearAuthSession, getAuthUser, getDashboardRouteByRole, refreshAuthSession } from '../../services/authStorage';
 
 /**
  * ProtectedRoute Component
@@ -7,11 +8,51 @@ import { getAuthToken, getAuthUser, getDashboardRouteByRole } from '../../servic
  */
 
 function ProtectedRoute({ children, allowedRoles, requirePasswordChange = false }) {
-  const token = getAuthToken();
-  const user = getAuthUser();
   const location = useLocation();
+  const [authState, setAuthState] = useState(() => ({
+    status: 'loading',
+    user: getAuthUser()
+  }));
 
-  if (!token || !user) {
+  useEffect(() => {
+    let isActive = true;
+
+    const verifySession = async () => {
+      try {
+        const user = await refreshAuthSession();
+
+        if (isActive) {
+          setAuthState({ status: 'authenticated', user });
+        }
+      } catch {
+        if (isActive) {
+          clearAuthSession();
+          setAuthState({ status: 'unauthenticated', user: null });
+        }
+      }
+    };
+
+    verifySession();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  if (authState.status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8 text-center">
+        <div className="rounded-2xl bg-white px-6 py-5 shadow-lg">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-600 border-t-transparent" />
+          <p className="mt-4 text-sm font-semibold text-slate-600">Checking your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const user = authState.user;
+
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

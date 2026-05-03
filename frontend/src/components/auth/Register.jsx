@@ -59,11 +59,11 @@ function Register() {
         role: selectedProfile
       });
 
-      if (!result?.token || !result?.user) {
-        throw new Error('Registration response is missing token or user data.');
+      if (!result?.user) {
+        throw new Error('Registration response is missing user data.');
       }
 
-      setAuthSession({ token: result.token, user: result.user });
+      setAuthSession({ user: result.user });
       navigate(getDashboardRouteByRole(result.user.role));
     } catch (error) {
       console.error('Registration error:', error);

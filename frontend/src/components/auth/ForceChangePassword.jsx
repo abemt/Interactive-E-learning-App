@@ -76,11 +76,11 @@ function ForceChangePassword() {
         confirmNewPassword
       });
 
-      if (!result?.token || !result?.user) {
-        throw new Error('Password change response is missing token or user data.');
+      if (!result?.user) {
+        throw new Error('Password change response is missing user data.');
       }
 
-      setAuthSession({ token: result.token, user: result.user });
+      setAuthSession({ user: result.user });
       navigate(getDashboardRouteByRole(result.user.role), { replace: true });
     } catch (error) {
       const message =

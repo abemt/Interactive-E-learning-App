@@ -129,7 +129,7 @@ function StandardQuizUI({
   if (!question) return null;
 
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-cyan-200/60 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.55)]">
+    <div className="unselectable relative overflow-hidden rounded-[2rem] border border-cyan-200/60 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.55)]">
       <div className="pointer-events-none absolute -top-20 left-1/2 h-44 w-44 -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl" />
       <div className="pointer-events-none absolute -left-12 top-16 h-36 w-36 rounded-full bg-fuchsia-500/20 blur-3xl" />
       <div className="pointer-events-none absolute -right-12 bottom-12 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />

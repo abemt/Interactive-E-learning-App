@@ -128,7 +128,35 @@ function QuizEngine() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [securityNotice, setSecurityNotice] = useState('');
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const resultsNavigationRef = useRef(false);
+  const securityNoticeTimerRef = useRef(null);
+
+  const clearSecurityNotice = useCallback(() => {
+    if (securityNoticeTimerRef.current) {
+      window.clearTimeout(securityNoticeTimerRef.current);
+      securityNoticeTimerRef.current = null;
+    }
+
+    setSecurityNotice('');
+  }, []);
+
+  const showSecurityNotice = useCallback(
+    (message) => {
+      if (securityNoticeTimerRef.current) {
+        window.clearTimeout(securityNoticeTimerRef.current);
+      }
+
+      setSecurityNotice(message);
+
+      securityNoticeTimerRef.current = window.setTimeout(() => {
+        securityNoticeTimerRef.current = null;
+        setSecurityNotice('');
+      }, 30000);
+    },
+    []
+  );
 
   const loadQuiz = useCallback(async () => {
     setIsLoading(true);
@@ -162,12 +190,14 @@ function QuizEngine() {
       setQuestionStartedAt(Date.now());
       setStudentAnswers([]);
       setLastSubmissionMessage('');
+      setTabSwitchCount(0);
+      clearSecurityNotice();
     } catch (loadError) {
       setError(loadError?.response?.data?.message || loadError.message || 'Failed to load quiz.');
     } finally {
       setIsLoading(false);
     }
-  }, [quizId, user?.gradeLevel]);
+  }, [clearSecurityNotice, quizId, user?.gradeLevel]);
 
   useEffect(() => {
     loadQuiz();
@@ -176,6 +206,75 @@ function QuizEngine() {
   const currentQuestion = quiz?.questions?.[currentQuestionIndex] || null;
   const totalQuestions = quiz?.questions?.length || 0;
   const isComplete = totalQuestions > 0 && currentQuestionIndex >= totalQuestions;
+  const isQuizSecurityActive = Boolean(quiz && !isComplete);
+
+  useEffect(() => {
+    if (!isQuizSecurityActive) {
+      return undefined;
+    }
+
+    const clearClipboardBestEffort = async () => {
+      if (!navigator.clipboard?.writeText) {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText('');
+      } catch {
+        // Clipboard access is best-effort and may be blocked by the browser.
+      }
+    };
+
+    const handleContextMenu = (event) => {
+      event.preventDefault();
+    };
+
+    const handleKeyboardSecurity = (event) => {
+      const key = String(event.key || '').toLowerCase();
+      const code = String(event.code || '').toLowerCase();
+      const isModifierShortcut = event.ctrlKey || event.metaKey;
+      const isCopyShortcut = isModifierShortcut && key === 'c';
+      const isPrintShortcut = isModifierShortcut && key === 'p';
+      const isPrintScreen = key === 'printscreen' || code === 'printscreen';
+
+      if (isCopyShortcut || isPrintShortcut || isPrintScreen) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      if (isPrintScreen) {
+        void clearClipboardBestEffort();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        return;
+      }
+
+      setTabSwitchCount((currentCount) => currentCount + 1);
+      showSecurityNotice('Warning: Navigating away from the quiz is recorded.');
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('keydown', handleKeyboardSecurity, true);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('keydown', handleKeyboardSecurity, true);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isQuizSecurityActive, showSecurityNotice]);
+
+  useEffect(() => {
+    return () => {
+      if (securityNoticeTimerRef.current) {
+        window.clearTimeout(securityNoticeTimerRef.current);
+        securityNoticeTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleAnswerSelection = useCallback(
     async (selectedAnswer, meta = {}) => {
@@ -286,9 +385,10 @@ function QuizEngine() {
   );
 
   const handleAnswerAnimationComplete = useCallback(() => {
+    clearSecurityNotice();
     setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions));
     setQuestionStartedAt(Date.now());
-  }, [totalQuestions]);
+  }, [clearSecurityNotice, totalQuestions]);
 
   useEffect(() => {
     if (!isComplete || !quiz || resultsNavigationRef.current) {
@@ -363,7 +463,7 @@ function QuizEngine() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="unselectable min-h-screen bg-slate-50 p-8">
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-8 text-center shadow-lg">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
           <p className="mt-4 text-sm font-medium text-slate-600">Loading quiz...</p>
@@ -374,7 +474,7 @@ function QuizEngine() {
 
   if (error && !quiz) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="unselectable min-h-screen bg-slate-50 p-8">
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-8 shadow-lg">
           <h1 className="text-2xl font-bold text-slate-900">Quiz Unavailable</h1>
           <p className="mt-3 text-sm text-red-600">{error}</p>
@@ -401,7 +501,7 @@ function QuizEngine() {
 
   if (isComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-cyan-50 to-blue-50 p-8">
+      <div className="unselectable min-h-screen bg-gradient-to-br from-emerald-50 via-cyan-50 to-blue-50 p-8">
         <div className="mx-auto max-w-3xl rounded-3xl bg-white p-8 shadow-xl">
           <div className="text-center">
             <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
@@ -437,7 +537,20 @@ function QuizEngine() {
   const quizModeLabel = QUIZ_MODE_LABELS[quizMode] || 'Adaptive Quiz Mode';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-6">
+    <div className="unselectable min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-6">
+      {securityNotice && (
+        <div
+          className="fixed right-4 top-4 z-[70] max-w-sm rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-amber-900 shadow-2xl backdrop-blur"
+          role="alert"
+          aria-live="assertive"
+        >
+          <p className="text-sm font-extrabold">{securityNotice}</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+            Tab switches recorded: {tabSwitchCount}
+          </p>
+        </div>
+      )}
+
       <div className="mx-auto mb-4 flex max-w-5xl items-center justify-between gap-3">
         <button
           type="button"

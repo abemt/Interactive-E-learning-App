@@ -1,21 +1,12 @@
 import axios from "axios";
-import { getAuthToken, getAuthUser, setAuthSession } from "./authStorage";
+import { getAuthUser, setAuthSession } from "./authStorage";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api",
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json"
   }
-});
-
-apiClient.interceptors.request.use((config) => {
-  const token = getAuthToken();
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
 });
 
 apiClient.interceptors.response.use(
@@ -25,12 +16,10 @@ apiClient.interceptors.response.use(
     const code = error?.response?.data?.code;
 
     if (status === 403 && code === "PASSWORD_CHANGE_REQUIRED") {
-      const token = getAuthToken();
       const user = getAuthUser();
 
-      if (token && user && !user.needsPasswordChange) {
+      if (user && !user.needsPasswordChange) {
         setAuthSession({
-          token,
           user: {
             ...user,
             needsPasswordChange: true

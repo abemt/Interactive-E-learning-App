@@ -4,13 +4,13 @@ const { User } = require("../models");
 const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret_change_me";
 
 const isPasswordChangeEndpoint = (req) => req.baseUrl === "/api/auth" && req.path === "/change-password";
+const isSessionCheckEndpoint = (req) => req.baseUrl === "/api/auth" && req.path === "/me";
 
 const authenticateJWT = async (req, res, next) => {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const token = req.cookies?.token;
 
   if (!token) {
-    return res.status(401).json({ message: "Missing bearer token." });
+    return res.status(401).json({ message: "Missing session token." });
   }
 
   try {
@@ -50,7 +50,7 @@ const authenticateJWT = async (req, res, next) => {
       needsPasswordChange: Boolean(currentUser.needsPasswordChange)
     };
 
-    if (req.user.needsPasswordChange && !isPasswordChangeEndpoint(req)) {
+    if (req.user.needsPasswordChange && !isPasswordChangeEndpoint(req) && !isSessionCheckEndpoint(req)) {
       return res.status(403).json({
         success: false,
         code: "PASSWORD_CHANGE_REQUIRED",

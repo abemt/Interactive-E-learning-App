@@ -1,24 +1,10 @@
-const AUTH_TOKEN_KEY = "authToken";
 const AUTH_USER_KEY = "authUser";
+const LEGACY_AUTH_USER_KEY = "user";
+const LEGACY_AUTH_TOKEN_KEYS = ["authToken", "token"];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 function normalizeNeedsPasswordChange(value) {
   return value === true || value === "true" || value === 1 || value === "1";
-}
-
-function decodeJwtPayload(token) {
-  if (!token || typeof token !== "string") return null;
-
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-
-  try {
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const json = atob(padded);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
 }
 
 function normalizeRole(role) {
@@ -35,91 +21,111 @@ function normalizeRole(role) {
   return mapped[trimmed.toLowerCase()] || trimmed;
 }
 
-export function setAuthSession({ token, user }) {
-  if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-    localStorage.setItem("token", token);
-  }
+function normalizeStoredUser(user) {
+  if (!user) return null;
 
-  if (user) {
-    const normalizedUser = {
-      ...user,
-      role: normalizeRole(user.role),
-      needsPasswordChange: normalizeNeedsPasswordChange(user.needsPasswordChange)
-    };
-    const userSerialized = JSON.stringify(normalizedUser);
-    localStorage.setItem(AUTH_USER_KEY, userSerialized);
-    localStorage.setItem("user", userSerialized);
-  }
+  return {
+    ...user,
+    role: normalizeRole(user.role),
+    needsPasswordChange: normalizeNeedsPasswordChange(user.needsPasswordChange)
+  };
 }
 
-export function getAuthToken() {
-  return localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem("token");
+function persistAuthUser(user) {
+  const normalizedUser = normalizeStoredUser(user);
+
+  if (!normalizedUser) {
+    return null;
+  }
+
+  const userSerialized = JSON.stringify(normalizedUser);
+  localStorage.setItem(AUTH_USER_KEY, userSerialized);
+  localStorage.setItem(LEGACY_AUTH_USER_KEY, userSerialized);
+
+  return normalizedUser;
 }
 
-export function getAuthUser() {
-  const userRaw = localStorage.getItem(AUTH_USER_KEY) || localStorage.getItem("user");
-  const tokenPayload = decodeJwtPayload(getAuthToken());
+function clearStoredAuthUser() {
+  localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(LEGACY_AUTH_USER_KEY);
+  LEGACY_AUTH_TOKEN_KEYS.forEach((key) => localStorage.removeItem(key));
+}
 
+function parseStoredUser(userRaw) {
   if (!userRaw) {
-    if (!tokenPayload) {
-      return null;
-    }
-
-    const rebuiltUser = {
-      id: tokenPayload.sub ?? tokenPayload.id,
-      email: tokenPayload.email,
-      fullName: tokenPayload.fullName,
-      role: normalizeRole(tokenPayload.role),
-      classId: tokenPayload.classId ?? null,
-      totalXP: tokenPayload.totalXP ?? 0,
-      needsPasswordChange: normalizeNeedsPasswordChange(tokenPayload.needsPasswordChange)
-    };
-
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(rebuiltUser));
-    localStorage.setItem("user", JSON.stringify(rebuiltUser));
-    return rebuiltUser;
+    return null;
   }
 
   try {
-    const parsed = JSON.parse(userRaw);
-    if (!parsed) return null;
-
-    return {
-      ...parsed,
-      role: normalizeRole(parsed.role),
-      needsPasswordChange: normalizeNeedsPasswordChange(parsed.needsPasswordChange)
-    };
+    return normalizeStoredUser(JSON.parse(userRaw));
   } catch {
-    // Fallback for stale/corrupt user payloads: rebuild a minimal user from JWT.
-    if (!tokenPayload) {
-      clearAuthSession();
-      return null;
-    }
-
-    const rebuiltUser = {
-      id: tokenPayload.sub ?? tokenPayload.id,
-      email: tokenPayload.email,
-      fullName: tokenPayload.fullName,
-      role: normalizeRole(tokenPayload.role),
-      classId: tokenPayload.classId ?? null,
-      totalXP: tokenPayload.totalXP ?? 0,
-      needsPasswordChange: normalizeNeedsPasswordChange(tokenPayload.needsPasswordChange)
-    };
-
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(rebuiltUser));
-    localStorage.setItem("user", JSON.stringify(rebuiltUser));
-    return rebuiltUser;
+    return null;
   }
 }
 
-export function clearAuthSession() {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_USER_KEY);
+export function setAuthSession({ user } = {}) {
+  if (!user) {
+    return null;
+  }
 
-  // Remove legacy keys to avoid stale auth state.
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  return persistAuthUser(user);
+}
+
+export function getAuthUser() {
+  const userRaw = localStorage.getItem(AUTH_USER_KEY) || localStorage.getItem(LEGACY_AUTH_USER_KEY);
+
+  if (!userRaw) {
+    return null;
+  }
+
+  const parsed = parseStoredUser(userRaw);
+  if (parsed) {
+    return parsed;
+  }
+
+  clearStoredAuthUser();
+  return null;
+}
+
+export function clearAuthSession() {
+  clearStoredAuthUser();
+
+  void fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    }
+  }).catch(() => {});
+}
+
+export async function refreshAuthSession() {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    clearStoredAuthUser();
+    const error = new Error(payload?.message || "Session expired.");
+    error.status = response.status;
+    throw error;
+  }
+
+  const user = payload?.user || payload?.data?.user || payload?.data || null;
+
+  if (!user) {
+    clearStoredAuthUser();
+    throw new Error("Session response did not include a user.");
+  }
+
+  persistAuthUser(user);
+  return getAuthUser();
 }
 
 export function getDashboardRouteByRole(role) {

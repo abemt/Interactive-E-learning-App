@@ -39,15 +39,15 @@ function Login() {
       const normalizedEmail = normalizeLoginEmail(email);
       const result = await loginUser({ identifier: normalizedEmail, password });
 
-      if (!result?.token || !result?.user) {
-        throw new Error('Login response is missing token or user data.');
+      if (!result?.user) {
+        throw new Error('Login response is missing user data.');
       }
 
       if (result.user.role !== selectedProfile) {
         throw new Error(`This account is registered as ${result.user.role}. Please select the correct profile.`);
       }
 
-      setAuthSession({ token: result.token, user: result.user });
+      setAuthSession({ user: result.user });
 
       if (result.user.needsPasswordChange) {
         navigate('/change-password', { replace: true });
