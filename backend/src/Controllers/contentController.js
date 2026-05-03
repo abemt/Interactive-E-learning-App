@@ -121,6 +121,89 @@ const buildMediaUrlFromUploadedFile = (file) => {
   return null;
 };
 
+const LESSON_VISUAL_THEMES = new Set(["Space", "Nature", "Lab"]);
+
+const normalizeLessonText = (value) => String(value || "").trim();
+
+const mapUploadedFilesByField = (uploadedFiles = []) => {
+  return uploadedFiles.reduce((acc, file) => {
+    if (file?.fieldname) {
+      acc[file.fieldname] = file;
+    }
+
+    return acc;
+  }, {});
+};
+
+const parseLessonCardsInput = (cards) => {
+  if (Array.isArray(cards)) {
+    return cards;
+  }
+
+  if (typeof cards === "string") {
+    return JSON.parse(cards);
+  }
+
+  return null;
+};
+
+const buildLessonCards = (parsedCards, fileByField = {}, existingCards = []) => {
+  if (!Array.isArray(parsedCards) || parsedCards.length === 0) {
+    throw new Error("At least one content card is required");
+  }
+
+  return parsedCards.map((card, index) => {
+    const existingCard = existingCards[index] || {};
+    const textContent = normalizeLessonText(card?.textContent);
+
+    if (!textContent) {
+      throw new Error(`Card ${index + 1} is missing text content`);
+    }
+
+    const requestedTheme = normalizeLessonText(card?.visualTheme || "Space");
+    const visualTheme = LESSON_VISUAL_THEMES.has(requestedTheme) ? requestedTheme : "Space";
+
+    const imageField = card?.imageField || `image_${index}`;
+    const audioField = card?.audioField || `audio_${index}`;
+
+    const imageFile = fileByField[imageField];
+    const audioFile = fileByField[audioField];
+
+    if (imageFile && !imageFile.mimetype.startsWith("image/")) {
+      throw new Error(`Card ${index + 1} image file must be an image format`);
+    }
+
+    if (audioFile && !audioFile.mimetype.startsWith("audio/")) {
+      throw new Error(`Card ${index + 1} audio file must be an audio format`);
+    }
+
+    const imageUrl =
+      buildMediaUrlFromUploadedFile(imageFile) ||
+      normalizeLessonText(card?.imageUrl || card?.existingImageUrl || existingCard.imageUrl) ||
+      null;
+
+    const audioUrl =
+      buildMediaUrlFromUploadedFile(audioFile) ||
+      normalizeLessonText(card?.audioUrl || card?.existingAudioUrl || existingCard.audioUrl) ||
+      null;
+
+    return {
+      order: index + 1,
+      textContent,
+      visualTheme,
+      imageUrl,
+      audioUrl
+    };
+  });
+};
+
+const buildLessonPayload = ({ title, lessonCards, lessonType = "ImmersiveLesson" }) => ({
+  title: normalizeLessonText(title),
+  lessonType,
+  cardCount: lessonCards.length,
+  cards: lessonCards
+});
+
 const safeParseJson = (value) => {
   if (!value) return null;
   if (typeof value === "object") return value;
@@ -1404,58 +1487,17 @@ class ContentController {
       }
 
       const uploadedFiles = Array.isArray(req.files) ? req.files : [];
-      const fileByField = uploadedFiles.reduce((acc, file) => {
-        if (file?.fieldname) {
-          acc[file.fieldname] = file;
-        }
-        return acc;
-      }, {});
-
-      const allowedThemes = new Set(["Space", "Nature", "Lab"]);
-
-      const lessonCards = parsedCards.map((card, index) => {
-        const textContent = String(card?.textContent || "").trim();
-        if (!textContent) {
-          throw new Error(`Card ${index + 1} is missing text content`);
-        }
-
-        const requestedTheme = String(card?.visualTheme || "Space").trim();
-        const visualTheme = allowedThemes.has(requestedTheme) ? requestedTheme : "Space";
-
-        const imageField = card?.imageField || `image_${index}`;
-        const audioField = card?.audioField || `audio_${index}`;
-
-        const imageFile = fileByField[imageField];
-        const audioFile = fileByField[audioField];
-
-        if (imageFile && !imageFile.mimetype.startsWith("image/")) {
-          throw new Error(`Card ${index + 1} image file must be an image format`);
-        }
-
-        if (audioFile && !audioFile.mimetype.startsWith("audio/")) {
-          throw new Error(`Card ${index + 1} audio file must be an audio format`);
-        }
-
-        return {
-          order: index + 1,
-          textContent,
-          visualTheme,
-          imageUrl: buildMediaUrlFromUploadedFile(imageFile),
-          audioUrl: buildMediaUrlFromUploadedFile(audioFile)
-        };
+      const fileByField = mapUploadedFilesByField(uploadedFiles);
+      const lessonCards = buildLessonCards(parsedCards, fileByField);
+      const lessonPayload = buildLessonPayload({
+        title,
+        lessonCards
       });
-
-      const lessonPayload = {
-        title: String(title).trim(),
-        lessonType: "ImmersiveLesson",
-        cardCount: lessonCards.length,
-        cards: lessonCards
-      };
 
       const firstCardWithMedia = lessonCards.find((card) => card.imageUrl || card.audioUrl) || null;
       const lessonItem = await ContentItem.create({
         moduleId: Number(moduleId),
-        title: String(title).trim(),
+        title: normalizeLessonText(title),
         itemType: "Lesson",
         contentBody: JSON.stringify(lessonPayload),
         contentUrl: firstCardWithMedia?.imageUrl || firstCardWithMedia?.audioUrl || null,
@@ -1463,6 +1505,143 @@ class ContentController {
       });
 
       return res.status(201).json({
+
+  /**
+   * Update an immersive lesson content item.
+   * PUT /api/content/lesson/:lessonId
+   */
+  async updateLessonContentItem(req, res) {
+    try {
+      const { lessonId } = req.params;
+      const { moduleId, title, cards, sequenceOrder } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      const lessonItem = await ContentItem.findByPk(lessonId, {
+        include: [
+          {
+            model: ContentModule,
+            as: "module",
+            include: [{ model: Class, as: "class" }]
+          }
+        ]
+      });
+
+      if (!lessonItem || lessonItem.itemType !== "Lesson") {
+        return res.status(404).json({
+          success: false,
+          message: "Lesson not found"
+        });
+      }
+
+      if (userRole === "Teacher" && !(await canTeacherAccessModule(userId, lessonItem.module))) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own lessons"
+        });
+      }
+
+      if (userRole !== "Teacher" && userRole !== "Admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Insufficient permissions"
+        });
+      }
+
+      let resolvedModule = lessonItem.module;
+
+      if (moduleId && String(moduleId) !== String(lessonItem.moduleId)) {
+        resolvedModule = await ContentModule.findByPk(moduleId, {
+          include: [{ model: Class, as: "class" }]
+        });
+
+        if (!resolvedModule) {
+          return res.status(404).json({
+            success: false,
+            message: "Module not found"
+          });
+        }
+
+        if (userRole === "Teacher" && !(await canTeacherAccessModule(userId, resolvedModule))) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only move lessons to your own modules"
+          });
+        }
+      }
+
+      const existingPayload = safeParseJson(lessonItem.contentBody) || {};
+      const existingCards = Array.isArray(existingPayload.cards) ? existingPayload.cards : [];
+
+      let parsedCards;
+      try {
+        parsedCards = parseLessonCardsInput(cards);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          message: "cards must be a valid JSON array"
+        });
+      }
+
+      if (!Array.isArray(parsedCards) || parsedCards.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one content card is required"
+        });
+      }
+
+      const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+      const fileByField = mapUploadedFilesByField(uploadedFiles);
+      const lessonCards = buildLessonCards(parsedCards, fileByField, existingCards);
+      const lessonPayload = buildLessonPayload({
+        title: title || lessonItem.title || existingPayload.title || "",
+        lessonCards,
+        lessonType: existingPayload.lessonType || "ImmersiveLesson"
+      });
+
+      const firstCardWithMedia = lessonCards.find((card) => card.imageUrl || card.audioUrl) || null;
+
+      if (resolvedModule?.id) {
+        lessonItem.moduleId = resolvedModule.id;
+      }
+
+      lessonItem.title = normalizeLessonText(title || lessonItem.title || existingPayload.title || "");
+      lessonItem.itemType = "Lesson";
+      lessonItem.contentBody = JSON.stringify(lessonPayload);
+      lessonItem.contentUrl = firstCardWithMedia?.imageUrl || firstCardWithMedia?.audioUrl || null;
+      if (sequenceOrder !== undefined) {
+        lessonItem.sequenceOrder = Number(sequenceOrder) || 1;
+      }
+
+      await lessonItem.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Lesson updated successfully",
+        lessonId: lessonItem.id,
+        data: lessonItem
+      });
+    } catch (error) {
+      if (
+        error?.message?.includes("Card") ||
+        error?.message?.includes("text content") ||
+        error?.message?.includes("image file") ||
+        error?.message?.includes("audio file")
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      console.error("Error updating lesson content item:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error updating lesson content item",
+        error: error.message
+      });
+    }
+  }
         success: true,
         message: "Lesson created successfully",
         lessonId: lessonItem.id,

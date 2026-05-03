@@ -36,6 +36,28 @@ function TeacherDashboard() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState('');
 
+  const safeParseJson = (value) => {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const isLessonContentItem = (item) => {
+    if (!item) return false;
+
+    if (item.itemType === 'Lesson') {
+      return true;
+    }
+
+    const parsedBody = safeParseJson(item.contentBody);
+    return parsedBody?.lessonType === 'ImmersiveLesson';
+  };
+
   const selectedClass = useMemo(
     () => assignedClasses.find((item) => String(item.id) === String(classId)) || null,
     [assignedClasses, classId]
@@ -335,6 +357,18 @@ function TeacherDashboard() {
   };
 
   const handleEditContentItem = (item) => {
+    if (isLessonContentItem(item)) {
+      const params = new URLSearchParams({
+        mode: 'edit',
+        lessonId: String(item.id),
+        moduleId: String(item.moduleId || selectedModuleForItems?.id || ''),
+        classId: String(classId || selectedModuleForItems?.classId || '')
+      });
+
+      navigate(`/teacher/lesson/create?${params.toString()}`);
+      return;
+    }
+
     setItemEditId(item.id);
     setItemForm({
       title: item.title || '',
@@ -639,6 +673,7 @@ function TeacherDashboard() {
                           </td>
                           <td className="px-4 py-2 text-right text-sm">
                             <button
+                              type="button"
                               onClick={() =>
                                 item.itemType === 'Quiz'
                                   ? handleEditQuizItem(item)
@@ -646,7 +681,11 @@ function TeacherDashboard() {
                               }
                               className="text-primary-600 hover:text-primary-800 mr-4"
                             >
-                              {item.itemType === 'Quiz' ? 'Edit Quiz' : 'Edit'}
+                              {item.itemType === 'Quiz'
+                                ? 'Edit Quiz'
+                                : isLessonContentItem(item)
+                                ? 'Edit Lesson'
+                                : 'Edit'}
                             </button>
                             <button
                               onClick={() => handleDeleteContentItem(item.id)}

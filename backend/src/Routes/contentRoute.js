@@ -64,6 +64,9 @@ router.put("/quiz/:quizId", authenticateJWT, uploadSingle("media"), contentContr
 // Create a lesson content item with dynamic card media uploads (Teachers/Admins only)
 router.post("/lesson", authenticateJWT, uploadAny(40), contentController.createLessonContentItem);
 
+// Update a lesson content item with dynamic card media uploads (Teachers/Admins only)
+router.put("/lesson/:lessonId", authenticateJWT, uploadAny(40), contentController.updateLessonContentItem);
+
 // Create a new content item (Teachers/Admins only)
 router.post("/items", authenticateJWT, contentController.createContentItem);
 
