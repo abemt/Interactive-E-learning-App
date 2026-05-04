@@ -6,12 +6,13 @@ import apiClient from './apiClient';
  */
 
 const DB_NAME = 'elearning-offline-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
   QUIZ_SCORES: 'quizScores',
   USER_PROGRESS: 'userProgress',
-  PENDING_SYNC: 'pendingSync'
+  PENDING_SYNC: 'pendingSync',
+  PRACTICE_ATTEMPTS: 'practiceAttempts'
 };
 
 let hasRegisteredOnlineSyncListener = false;
@@ -51,6 +52,16 @@ async function getDB() {
         syncStore.createIndex('type', 'type', { unique: false });
         syncStore.createIndex('timestamp', 'timestamp', { unique: false });
         syncStore.createIndex('syncStatus', 'syncStatus', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORES.PRACTICE_ATTEMPTS)) {
+        const practiceStore = db.createObjectStore(STORES.PRACTICE_ATTEMPTS, {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+        practiceStore.createIndex('moduleId', 'moduleId', { unique: false });
+        practiceStore.createIndex('quizId', 'quizId', { unique: false });
+        practiceStore.createIndex('timestamp', 'timestamp', { unique: false });
       }
     }
   });
@@ -104,6 +115,26 @@ export async function saveQuizScoreOffline(quizScore) {
     return id;
   } catch (error) {
     console.error('Error saving quiz score offline:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save a practice attempt locally (no XP or server sync).
+ */
+export async function savePracticeAttemptOffline(attempt) {
+  try {
+    const db = await getDB();
+
+    const practiceData = {
+      ...attempt,
+      timestamp: Date.now(),
+      savedAt: new Date().toISOString()
+    };
+
+    return await db.add(STORES.PRACTICE_ATTEMPTS, practiceData);
+  } catch (error) {
+    console.error('Error saving practice attempt offline:', error);
     throw error;
   }
 }
@@ -446,6 +477,7 @@ export async function getSyncStatus() {
 export default {
   initDB,
   saveQuizScoreOffline,
+  savePracticeAttemptOffline,
   submitQuizAnswerWithOfflineSupport,
   getUnsyncedQuizScores,
   markQuizScoreSynced,

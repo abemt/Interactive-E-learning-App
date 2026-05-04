@@ -4,6 +4,7 @@ import apiClient from '../../services/apiClient';
 import { clearAuthSession, getAuthUser } from '../../services/authStorage';
 import FidelChart from './FidelChart';
 import NumeracyGrid from './NumeracyGrid';
+import PracticeQuiz from './PracticeQuiz';
 
 const ITEM_THEME = {
   Lesson: {
@@ -64,6 +65,37 @@ const QUICK_PRACTICE_CARDS = [
     badgeClass: 'bg-white text-amber-700 border-amber-100'
   }
 ];
+
+const PRACTICE_MODULE_KEYWORDS = {
+  FIDEL: ['fidel', 'amharic'],
+  NUMERACY: ['numeracy', 'number', 'math']
+};
+
+const normalizeModuleTitle = (moduleTitle) => String(moduleTitle || '').toLowerCase();
+
+const collectModuleSummaries = (terms = []) => {
+  const moduleMap = new Map();
+
+  terms.forEach((term) => {
+    (term.items || []).forEach((node) => {
+      if (!node?.moduleId || moduleMap.has(node.moduleId)) {
+        return;
+      }
+
+      moduleMap.set(node.moduleId, {
+        id: node.moduleId,
+        title: node.moduleTitle || ''
+      });
+    });
+  });
+
+  return [...moduleMap.values()];
+};
+
+const findPracticeModuleByKeyword = (modules, keywords = []) =>
+  modules.find((module) =>
+    keywords.some((keyword) => normalizeModuleTitle(module.title).includes(keyword))
+  ) || null;
 
 function resolveStudentClassName(user, classInfo) {
   const candidates = [
@@ -225,6 +257,28 @@ function StudentDashboardNew() {
   const monthlyReward =
     leaderboard?.monthlyReward ||
     'Top 3 learners each month earn recognition certificates and bonus classroom rewards.';
+
+  const practiceModules = useMemo(() => {
+    const modules = collectModuleSummaries(terms);
+    return {
+      fidel: findPracticeModuleByKeyword(modules, PRACTICE_MODULE_KEYWORDS.FIDEL),
+      numeracy: findPracticeModuleByKeyword(modules, PRACTICE_MODULE_KEYWORDS.NUMERACY)
+    };
+  }, [terms]);
+
+  const activePracticeModule =
+    activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL
+      ? practiceModules.fidel
+      : activeQuickPractice === QUICK_PRACTICE_MODES.NUMERACY
+      ? practiceModules.numeracy
+      : null;
+
+  const activePracticeFallbackTitle =
+    activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL
+      ? 'Fidel'
+      : activeQuickPractice === QUICK_PRACTICE_MODES.NUMERACY
+      ? 'Numeracy'
+      : 'Practice';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#dff4ff_0%,#e8f8ff_28%,#f7ffec_58%,#fff9f0_100%)]">
@@ -608,11 +662,33 @@ function StudentDashboardNew() {
           </div>
 
           <div className="flex-1 overflow-y-auto bg-white">
-            {activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL ? (
-              <FidelChart onBack={() => setActiveQuickPractice(null)} />
-            ) : (
-              <NumeracyGrid onBack={() => setActiveQuickPractice(null)} />
-            )}
+            <div className="space-y-8 pb-10">
+              {activeQuickPractice === QUICK_PRACTICE_MODES.FIDEL ? (
+                <FidelChart onBack={() => setActiveQuickPractice(null)} />
+              ) : (
+                <NumeracyGrid onBack={() => setActiveQuickPractice(null)} />
+              )}
+
+              <section className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">Practice Quiz</p>
+                    <h3 className="mt-1 text-lg font-black text-slate-900">
+                      {activePracticeFallbackTitle} quiz
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                    No XP
+                  </span>
+                </div>
+
+                <PracticeQuiz
+                  moduleId={activePracticeModule?.id}
+                  moduleTitle={activePracticeModule?.title || activePracticeFallbackTitle}
+                  variant={activeQuickPractice}
+                />
+              </section>
+            </div>
           </div>
         </div>
       )}
