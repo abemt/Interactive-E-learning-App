@@ -12,6 +12,7 @@ const {
   ScoreLog,
   sequelize
 } = require("../models");
+const { buildPublicMediaUrl } = require("../config/mediaConfig");
 const gpeService = require("../Services/gpeService");
 
 const LESSON_COMPLETION_XP = 15;
@@ -111,11 +112,11 @@ const buildMediaUrlFromUploadedFile = (file) => {
   }
 
   if (file.mimetype.startsWith("image/")) {
-    return `/uploads/images/${file.filename}`;
+    return buildPublicMediaUrl("images", file.filename);
   }
 
   if (file.mimetype.startsWith("audio/")) {
-    return `/uploads/audio/${file.filename}`;
+    return buildPublicMediaUrl("audio", file.filename);
   }
 
   return null;

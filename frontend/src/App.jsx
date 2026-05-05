@@ -19,13 +19,15 @@ import DragAndDropTemplate from './components/games/DragAndDropTemplate'
 import FallingBlocksGame from './components/games/FallingBlocksGame'
 import AdminDashboard from './components/admin/AdminDashboard'
 import ParentDashboard from './components/parent/ParentDashboard'
+import { DashboardThemeProvider } from './context/DashboardThemeContext'
 
 function App() {
   const allRoles = ['Student', 'Teacher', 'Parent', 'Admin']
 
   return (
-    <Router>
-      <Routes>
+    <DashboardThemeProvider>
+      <Router>
+        <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -166,8 +168,9 @@ function App() {
             <p>Go manually to /login to restart.</p>
           </div>
         } />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </DashboardThemeProvider>
   )
 }
 

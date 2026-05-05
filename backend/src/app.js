@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
-const path = require("path");
 const healthRoute = require("./Routes/healthRoute");
 const authRoute = require("./Routes/authRoute");
 const adminRoute = require("./Routes/adminRoute");
@@ -12,6 +11,7 @@ const quizRoute = require("./Routes/quizRoute");
 const scoreLogRoute = require("./Routes/scoreLogRoute");
 const syncRoute = require("./Routes/syncRoute");
 const parentRoute = require("./Routes/parentRoute");
+const { mediaRoot, publicPath } = require("./config/mediaConfig");
 
 const app = express();
 
@@ -20,8 +20,8 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Serve static files from uploads directory
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// Serve static files from media directory
+app.use(publicPath, express.static(mediaRoot));
 
 app.use("/api/health", healthRoute);
 app.use("/api/auth", authRoute);

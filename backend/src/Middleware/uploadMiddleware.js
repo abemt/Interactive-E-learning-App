@@ -1,14 +1,20 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const {
+  imageDir,
+  audioDir,
+  uploadMaxBytes,
+  uploadMaxMb
+} = require("../config/mediaConfig");
 
 // Ensure upload directories exist
 const uploadDirs = {
-  images: path.join(__dirname, "../../uploads/images"),
-  audio: path.join(__dirname, "../../uploads/audio")
+  images: imageDir,
+  audio: audioDir
 };
 
-Object.values(uploadDirs).forEach(dir => {
+Object.values(uploadDirs).forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -54,7 +60,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max file size
+    fileSize: uploadMaxBytes
   }
 });
 
@@ -69,7 +75,7 @@ const uploadSingle = (fieldName) => {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
             success: false,
-            message: "File too large. Maximum size is 10MB."
+            message: `File too large. Maximum size is ${uploadMaxMb}MB.`
           });
         }
         return res.status(400).json({
@@ -100,7 +106,7 @@ const uploadMultiple = (fieldName, maxCount = 5) => {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
             success: false,
-            message: "One or more files too large. Maximum size is 10MB per file."
+            message: `One or more files too large. Maximum size is ${uploadMaxMb}MB per file.`
           });
         }
         if (err.code === "LIMIT_UNEXPECTED_FILE") {
@@ -138,7 +144,7 @@ const uploadFields = () => {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
             success: false,
-            message: "File too large. Maximum size is 10MB."
+            message: `File too large. Maximum size is ${uploadMaxMb}MB.`
           });
         }
         return res.status(400).json({
@@ -167,7 +173,7 @@ const uploadAny = (maxCount = 20) => {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
             success: false,
-            message: "One or more files are too large. Maximum size is 10MB per file."
+            message: `One or more files are too large. Maximum size is ${uploadMaxMb}MB per file.`
           });
         }
 

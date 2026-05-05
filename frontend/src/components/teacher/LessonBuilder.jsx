@@ -32,6 +32,7 @@ const createEmptyCard = (seed = 0, card = {}) => ({
   visualTheme: normalizeTheme(card.visualTheme),
   imageFile: null,
   audioFile: null,
+  audioPreviewUrl: '',
   imageUrl: String(card.imageUrl || card.existingImageUrl || ''),
   audioUrl: String(card.audioUrl || card.existingAudioUrl || '')
 });
@@ -59,7 +60,15 @@ function LessonBuilder() {
   const [hasLoadedEditData, setHasLoadedEditData] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [recordingCardId, setRecordingCardId] = useState(null);
+  const [recordingError, setRecordingError] = useState('');
+  const [recordingErrorCardId, setRecordingErrorCardId] = useState(null);
   const originalLessonRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const recordingChunksRef = useRef([]);
+  const discardRecordingRef = useRef(false);
+  const audioPreviewUrlsRef = useRef(new Map());
 
   const selectedModule = useMemo(
     () => modules.find((module) => String(module.id) === String(moduleId)) || null,
@@ -226,21 +235,64 @@ function LessonBuilder() {
     setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, [fieldName]: value } : card)));
   };
 
+  const revokePreviewUrl = (url) => {
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const setCardAudioState = (cardId, updater) => {
+    setCards((prev) =>
+      prev.map((card) => {
+        if (card.id !== cardId) {
+          return card;
+        }
+
+        const nextCard = typeof updater === 'function' ? updater(card) : { ...card, ...updater };
+        if (card.audioPreviewUrl && card.audioPreviewUrl !== nextCard.audioPreviewUrl) {
+          revokePreviewUrl(card.audioPreviewUrl);
+          audioPreviewUrlsRef.current.delete(cardId);
+        }
+
+        if (nextCard.audioPreviewUrl) {
+          audioPreviewUrlsRef.current.set(cardId, nextCard.audioPreviewUrl);
+        }
+
+        return nextCard;
+      })
+    );
+  };
+
+  const clearCardAudioPreview = (cardId) => {
+    const existingUrl = audioPreviewUrlsRef.current.get(cardId);
+    if (existingUrl) {
+      revokePreviewUrl(existingUrl);
+      audioPreviewUrlsRef.current.delete(cardId);
+    }
+  };
+
   const addCard = () => {
     setCards((prev) => [...prev, createEmptyCard(prev.length + 1)]);
   };
 
   const removeCard = (cardId) => {
+    if (recordingCardId === cardId) {
+      discardRecording(cardId);
+    }
+
     setCards((prev) => {
       if (prev.length <= 1) {
         return prev;
       }
-
+      clearCardAudioPreview(cardId);
       return prev.filter((card) => card.id !== cardId);
     });
   };
 
   const resetBuilder = () => {
+    audioPreviewUrlsRef.current.forEach((url) => revokePreviewUrl(url));
+    audioPreviewUrlsRef.current.clear();
+
     if (isEditMode && originalLessonRef.current) {
       const snapshot = originalLessonRef.current;
 
@@ -249,13 +301,162 @@ function LessonBuilder() {
       setCards((snapshot.cards || [createEmptyCard(1)]).map((card, index) => createEmptyCard(index + 1, card)));
       setError('');
       setNotice('');
+      setRecordingError('');
+      setRecordingErrorCardId(null);
       return;
     }
 
     setLessonTitle('');
     setSequenceOrder('1');
     setCards([createEmptyCard(1)]);
+    setRecordingError('');
+    setRecordingErrorCardId(null);
   };
+
+  const supportsAudioRecording = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      Boolean(navigator?.mediaDevices?.getUserMedia && window.MediaRecorder),
+    []
+  );
+
+  const stopActiveRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+
+    if (recordingStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+  };
+
+  const handleAudioFileChange = (cardId, file) => {
+    setRecordingError('');
+    setRecordingErrorCardId(null);
+
+    if (!file) {
+      setCardAudioState(cardId, (card) => ({
+        ...card,
+        audioFile: null,
+        audioPreviewUrl: ''
+      }));
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setCardAudioState(cardId, (card) => ({
+      ...card,
+      audioFile: file,
+      audioPreviewUrl: previewUrl
+    }));
+  };
+
+  const startRecording = async (cardId) => {
+    if (!supportsAudioRecording) {
+      setRecordingError('Audio recording is not supported in this browser.');
+      setRecordingErrorCardId(cardId);
+      return;
+    }
+
+    if (recordingCardId) {
+      setRecordingError('Finish the current recording before starting a new one.');
+      setRecordingErrorCardId(cardId);
+      return;
+    }
+
+    setRecordingError('');
+    setRecordingErrorCardId(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+
+      recordingStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordingChunksRef.current = [];
+      discardRecordingRef.current = false;
+      setRecordingCardId(cardId);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const chunks = recordingChunksRef.current;
+        const shouldDiscard = discardRecordingRef.current;
+
+        recordingChunksRef.current = [];
+        discardRecordingRef.current = false;
+
+        if (!shouldDiscard && chunks.length > 0) {
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          const fileName = `lesson-audio-${Date.now()}.webm`;
+          const file = new File([blob], fileName, { type: blob.type || 'audio/webm' });
+          const previewUrl = URL.createObjectURL(blob);
+
+          setCardAudioState(cardId, (card) => ({
+            ...card,
+            audioFile: file,
+            audioPreviewUrl: previewUrl
+          }));
+        }
+
+        stopActiveRecording();
+        setRecordingCardId(null);
+      };
+
+      recorder.start();
+    } catch (recordError) {
+      setRecordingError('Microphone access was blocked. Please allow access and try again.');
+      setRecordingErrorCardId(cardId);
+      stopActiveRecording();
+      setRecordingCardId(null);
+    }
+  };
+
+  const stopRecording = () => {
+    if (!mediaRecorderRef.current) {
+      return;
+    }
+
+    discardRecordingRef.current = false;
+    stopActiveRecording();
+  };
+
+  const discardRecording = (cardId) => {
+    if (recordingCardId === cardId && mediaRecorderRef.current) {
+      discardRecordingRef.current = true;
+      stopActiveRecording();
+      setRecordingCardId(null);
+      return;
+    }
+
+    setCardAudioState(cardId, (card) => ({
+      ...card,
+      audioFile: null,
+      audioPreviewUrl: ''
+    }));
+  };
+
+  const removeAudio = (cardId) => {
+    setCardAudioState(cardId, (card) => ({
+      ...card,
+      audioFile: null,
+      audioPreviewUrl: '',
+      audioUrl: ''
+    }));
+  };
+
+  useEffect(() => {
+    return () => {
+      stopActiveRecording();
+      audioPreviewUrlsRef.current.forEach((url) => revokePreviewUrl(url));
+      audioPreviewUrlsRef.current.clear();
+    };
+  }, []);
 
   const serializeCardForSubmit = (card, index, payload) => {
     const cardData = {
@@ -284,6 +485,11 @@ function LessonBuilder() {
     event.preventDefault();
     setError('');
     setNotice('');
+
+    if (recordingCardId) {
+      setError('Stop the active audio recording before saving the lesson.');
+      return;
+    }
 
     if (!moduleId) {
       setError('Select a module before creating a lesson.');
@@ -566,13 +772,67 @@ function LessonBuilder() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Optional Audio</label>
+                  <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Record audio</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startRecording(card.id)}
+                        disabled={!supportsAudioRecording || Boolean(recordingCardId) || isSubmitting}
+                        className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Start Recording
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopRecording}
+                        disabled={recordingCardId !== card.id || isSubmitting}
+                        className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Stop
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => discardRecording(card.id)}
+                        disabled={(!card.audioPreviewUrl && !card.audioFile) || isSubmitting}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Discard New Audio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeAudio(card.id)}
+                        disabled={(!card.audioUrl && !card.audioPreviewUrl && !card.audioFile) || isSubmitting}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Remove Audio
+                      </button>
+                    </div>
+                    {!supportsAudioRecording && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Recording is not supported in this browser.
+                      </p>
+                    )}
+                    {recordingCardId === card.id && (
+                      <p className="mt-2 text-xs font-semibold text-amber-700">Recording in progress...</p>
+                    )}
+                    {recordingError && recordingErrorCardId === card.id && (
+                      <p className="mt-2 text-xs text-red-600">{recordingError}</p>
+                    )}
+                  </div>
                   <input
                     type="file"
                     accept="audio/*"
-                    onChange={(event) => updateCard(card.id, 'audioFile', event.target.files?.[0] || null)}
+                    onChange={(event) => handleAudioFileChange(card.id, event.target.files?.[0] || null)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    disabled={isSubmitting || (recordingCardId && recordingCardId !== card.id)}
                   />
-                  {card.audioFile ? (
+                  {card.audioPreviewUrl ? (
+                    <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
+                      <audio controls className="w-full" src={card.audioPreviewUrl} />
+                      <p className="mt-2 text-xs text-gray-500">Audio ready to upload</p>
+                    </div>
+                  ) : card.audioFile ? (
                     <p className="mt-1 text-xs text-gray-500">Selected: {card.audioFile.name}</p>
                   ) : card.audioUrl ? (
                     <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
