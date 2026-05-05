@@ -131,6 +131,7 @@ function QuizEngine() {
   const [securityNotice, setSecurityNotice] = useState('');
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const resultsNavigationRef = useRef(false);
+  const scoreSubmissionRef = useRef(false);
   const securityNoticeTimerRef = useRef(null);
 
   const clearSecurityNotice = useCallback(() => {
@@ -161,6 +162,7 @@ function QuizEngine() {
   const loadQuiz = useCallback(async () => {
     setIsLoading(true);
     setError('');
+    scoreSubmissionRef.current = false;
 
     try {
       const response = await apiClient.get(`/quiz/render/${quizId}`);
@@ -207,6 +209,10 @@ function QuizEngine() {
   const totalQuestions = quiz?.questions?.length || 0;
   const isComplete = totalQuestions > 0 && currentQuestionIndex >= totalQuestions;
   const isQuizSecurityActive = Boolean(quiz && !isComplete);
+  const quizMode = useMemo(
+    () => resolveQuizMode({ gradeLevel, quizType: quiz?.quizType }),
+    [gradeLevel, quiz?.quizType]
+  );
 
   useEffect(() => {
     if (!isQuizSecurityActive) {
@@ -390,6 +396,59 @@ function QuizEngine() {
     setQuestionStartedAt(Date.now());
   }, [clearSecurityNotice, totalQuestions]);
 
+  const summary = useMemo(() => {
+    const correct = studentAnswers.filter((entry) => entry.isCorrect === true).length;
+    const pending = studentAnswers.filter((entry) => entry.pendingSync).length;
+    const xpEarned = studentAnswers.reduce((sum, entry) => sum + (entry.xpAwarded || 0), 0);
+
+    return {
+      attempted: studentAnswers.length,
+      correct,
+      pending,
+      xpEarned
+    };
+  }, [studentAnswers]);
+
+  useEffect(() => {
+    if (!isComplete || !quiz || scoreSubmissionRef.current) {
+      return;
+    }
+
+    if (
+      quizMode !== QUIZ_TYPE_VALUES.DRAG_AND_DROP &&
+      quizMode !== QUIZ_TYPE_VALUES.PUZZLE
+    ) {
+      return;
+    }
+
+    if (!totalQuestions) {
+      return;
+    }
+
+    scoreSubmissionRef.current = true;
+    const correctCount = summary.correct;
+    const passingScore = 70;
+    const scorePercent = Math.round((correctCount / totalQuestions) * 100);
+
+    const payload = {
+      contentItemId: quiz.id,
+      score: correctCount,
+      maxScore: totalQuestions,
+      passingScore,
+      isSuccessful: scorePercent >= passingScore
+    };
+
+    const submitScore = async () => {
+      try {
+        await apiClient.post('/score', payload);
+      } catch (submitError) {
+        console.error('Failed to submit completion score', submitError);
+      }
+    };
+
+    void submitScore();
+  }, [isComplete, quiz, quizMode, summary.correct, totalQuestions]);
+
   useEffect(() => {
     if (!isComplete || !quiz || resultsNavigationRef.current) {
       return;
@@ -448,18 +507,6 @@ function QuizEngine() {
     };
   }, [isComplete, navigate, quiz, studentAnswers, totalQuestions]);
 
-  const summary = useMemo(() => {
-    const correct = studentAnswers.filter((entry) => entry.isCorrect === true).length;
-    const pending = studentAnswers.filter((entry) => entry.pendingSync).length;
-    const xpEarned = studentAnswers.reduce((sum, entry) => sum + (entry.xpAwarded || 0), 0);
-
-    return {
-      attempted: studentAnswers.length,
-      correct,
-      pending,
-      xpEarned
-    };
-  }, [studentAnswers]);
 
   if (isLoading) {
     return (
@@ -533,7 +580,6 @@ function QuizEngine() {
     );
   }
 
-  const quizMode = resolveQuizMode({ gradeLevel, quizType: quiz?.quizType });
   const quizModeLabel = QUIZ_MODE_LABELS[quizMode] || 'Adaptive Quiz Mode';
 
   return (

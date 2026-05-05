@@ -30,6 +30,7 @@ app.use("/api/gamification", gamificationRoute);
 app.use("/api/content", contentRoute);
 app.use("/api/quiz", quizRoute);
 app.use("/api/scorelogs", scoreLogRoute);
+app.use("/api/score", scoreLogRoute);
 app.use("/api/sync", syncRoute);
 app.use("/api/parent", parentRoute);
 

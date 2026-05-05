@@ -1,4 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors
+} from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
+import { CSS } from '@dnd-kit/utilities';
+
+const DROP_ZONE_ID = 'drag-drop-zone';
 
 function resolveMediaUrl(path) {
   if (!path) return null;
@@ -7,6 +21,57 @@ function resolveMediaUrl(path) {
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
   const apiOrigin = apiBase.replace(/\/api\/?$/, '');
   return `${apiOrigin}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function DragDropOptionCard({
+  id,
+  option,
+  index,
+  disabled,
+  stateClass,
+  isRejected,
+  onChoose
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id,
+    data: { index },
+    disabled
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    touchAction: 'none'
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-2xl border p-4 shadow-sm transition ${stateClass} ${
+        disabled ? 'opacity-75' : 'cursor-grab hover:-translate-y-0.5 hover:shadow'
+      } ${isDragging ? 'opacity-60' : ''} ${isRejected ? 'animate-bounce' : ''}`}
+      {...attributes}
+      {...listeners}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-base font-bold text-slate-800">
+          <span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700">
+            {String.fromCharCode(65 + index)}
+          </span>
+          {option}
+        </p>
+        <button
+          type="button"
+          disabled={disabled}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => onChoose(index)}
+          className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          Choose
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function DragDropQuizUI({
@@ -22,19 +87,44 @@ function DragDropQuizUI({
   const [timeLeft, setTimeLeft] = useState(timeLimitSeconds);
   const [feedbackState, setFeedbackState] = useState('idle');
   const [selectedIndex, setSelectedIndex] = useState(null);
-  const [draggedIndex, setDraggedIndex] = useState(null);
-  const [isDropTargetActive, setIsDropTargetActive] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const [rejectedId, setRejectedId] = useState(null);
 
   const timeoutSubmittedRef = useRef(false);
   const feedbackTimerRef = useRef(null);
+  const rejectionTimerRef = useRef(null);
 
   const isInteractionLocked = isSubmitting || feedbackState !== 'idle';
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } })
+  );
+
+  const { setNodeRef: setDropZoneRef, isOver } = useDroppable({ id: DROP_ZONE_ID });
+  const isDropTargetActive = Boolean(isOver) && !isInteractionLocked;
+
+  const activeIndex = useMemo(() => {
+    if (!activeId) return null;
+    const index = Number(String(activeId).replace('option-', ''));
+    return Number.isInteger(index) ? index : null;
+  }, [activeId]);
+
+  const activeOption =
+    Number.isInteger(activeIndex) && Array.isArray(question?.options)
+      ? question.options[activeIndex]
+      : null;
 
   useEffect(() => {
     return () => {
       if (feedbackTimerRef.current) {
         window.clearTimeout(feedbackTimerRef.current);
         feedbackTimerRef.current = null;
+      }
+
+      if (rejectionTimerRef.current) {
+        window.clearTimeout(rejectionTimerRef.current);
+        rejectionTimerRef.current = null;
       }
     };
   }, []);
@@ -109,14 +199,49 @@ function DragDropQuizUI({
   const imageUrl = resolveMediaUrl(question?.imageUrl);
   const audioUrl = resolveMediaUrl(question?.audioUrl);
 
-  const handleDrop = async () => {
-    if (isInteractionLocked || draggedIndex === null || !question?.options?.[draggedIndex]) {
+  const handleDragStart = (event) => {
+    if (isInteractionLocked) return;
+    setActiveId(event.active.id);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+  };
+
+  const handleDragEnd = async (event) => {
+    if (isInteractionLocked) {
+      setActiveId(null);
       return;
     }
 
-    setIsDropTargetActive(false);
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || over.id !== DROP_ZONE_ID) {
+      return;
+    }
+
+    const draggedIndex = active?.data?.current?.index;
+    if (!Number.isInteger(draggedIndex) || !question?.options?.[draggedIndex]) {
+      return;
+    }
+
     const option = question.options[draggedIndex];
-    await handleAnswerCommit(option, { selectedIndex: draggedIndex });
+    const result = await handleAnswerCommit(option, {
+      selectedIndex: draggedIndex,
+      interaction: 'drag'
+    });
+
+    if (result?.ok && result.isCorrect === false) {
+      setRejectedId(active.id);
+      if (rejectionTimerRef.current) {
+        window.clearTimeout(rejectionTimerRef.current);
+      }
+      rejectionTimerRef.current = window.setTimeout(() => {
+        rejectionTimerRef.current = null;
+        setRejectedId(null);
+      }, 500);
+    }
   };
 
   if (!question) return null;
@@ -148,7 +273,9 @@ function DragDropQuizUI({
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
-              timeLeft <= 8 ? 'bg-gradient-to-r from-rose-500 to-orange-500' : 'bg-gradient-to-r from-emerald-500 to-lime-500'
+              timeLeft <= 8
+                ? 'bg-gradient-to-r from-rose-500 to-orange-500'
+                : 'bg-gradient-to-r from-emerald-500 to-lime-500'
             }`}
             style={{ width: `${timerProgress}%` }}
           />
@@ -175,87 +302,75 @@ function DragDropQuizUI({
         </div>
       )}
 
-      <div
-        className={`mt-5 rounded-3xl border-2 border-dashed p-5 text-center transition ${
-          feedbackState === 'correct'
-            ? 'border-emerald-300 bg-emerald-100'
-            : feedbackState === 'wrong'
-            ? 'border-rose-300 bg-rose-100'
-            : isDropTargetActive
-            ? 'border-cyan-400 bg-cyan-100/80'
-            : 'border-cyan-200 bg-white/80'
-        }`}
-        onDragOver={(event) => {
-          if (isInteractionLocked) return;
-          event.preventDefault();
-          setIsDropTargetActive(true);
-        }}
-        onDragLeave={() => setIsDropTargetActive(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          void handleDrop();
-        }}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+        modifiers={[snapCenterToCursor]}
       >
-        <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Drop Zone</p>
-        <p className="mt-2 text-lg font-bold text-slate-700">
-          {feedbackState === 'correct'
-            ? 'Correct answer submitted'
-            : feedbackState === 'wrong'
-            ? 'Answer submitted'
-            : draggedIndex === null
-            ? 'Drag a card here'
-            : 'Release to submit'}
-        </p>
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
-        {question.options.map((option, index) => {
-          const isSelected = selectedIndex === index;
-          const cardStateClass =
-            feedbackState === 'correct' && isSelected
+        <div
+          ref={setDropZoneRef}
+          className={`mt-5 rounded-3xl border-2 border-dashed p-5 text-center transition ${
+            feedbackState === 'correct'
               ? 'border-emerald-300 bg-emerald-100'
-              : feedbackState === 'wrong' && isSelected
+              : feedbackState === 'wrong'
               ? 'border-rose-300 bg-rose-100'
-              : 'border-slate-200 bg-white';
+              : isDropTargetActive
+              ? 'border-cyan-400 bg-cyan-100/80'
+              : 'border-cyan-200 bg-white/80'
+          }`}
+        >
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Drop Zone</p>
+          <p className="mt-2 text-lg font-bold text-slate-700">
+            {feedbackState === 'correct'
+              ? 'Correct answer submitted'
+              : feedbackState === 'wrong'
+              ? 'Answer submitted'
+              : activeOption
+              ? 'Release to submit'
+              : 'Drag a card here'}
+          </p>
+        </div>
 
-          return (
-            <div
-              key={`${option}-${index}`}
-              draggable={!isInteractionLocked}
-              onDragStart={() => {
-                if (isInteractionLocked) return;
-                setDraggedIndex(index);
-              }}
-              onDragEnd={() => {
-                setDraggedIndex(null);
-                setIsDropTargetActive(false);
-              }}
-              className={`rounded-2xl border p-4 shadow-sm transition ${cardStateClass} ${
-                isInteractionLocked ? 'opacity-75' : 'cursor-grab hover:-translate-y-0.5 hover:shadow'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-base font-bold text-slate-800">
-                  <span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700">
-                    {String.fromCharCode(65 + index)}
-                  </span>
-                  {option}
-                </p>
-                <button
-                  type="button"
-                  disabled={isInteractionLocked}
-                  onClick={() => {
-                    void handleAnswerCommit(option, { selectedIndex: index });
-                  }}
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Choose
-                </button>
-              </div>
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {question.options.map((option, index) => {
+            const isSelected = selectedIndex === index;
+            const cardStateClass =
+              feedbackState === 'correct' && isSelected
+                ? 'border-emerald-300 bg-emerald-100'
+                : feedbackState === 'wrong' && isSelected
+                ? 'border-rose-300 bg-rose-100'
+                : 'border-slate-200 bg-white';
+
+            return (
+              <DragDropOptionCard
+                key={`option-${index}`}
+                id={`option-${index}`}
+                option={option}
+                index={index}
+                disabled={isInteractionLocked}
+                stateClass={cardStateClass}
+                isRejected={rejectedId === `option-${index}`}
+                onChoose={(choiceIndex) => {
+                  void handleAnswerCommit(question.options[choiceIndex], {
+                    selectedIndex: choiceIndex,
+                    interaction: 'tap'
+                  });
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeOption ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-lg">
+              {activeOption}
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {isSubmitting && (
         <p className="mt-4 text-center text-sm font-semibold text-slate-600">Submitting answer...</p>
