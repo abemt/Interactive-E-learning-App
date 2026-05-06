@@ -5,6 +5,42 @@
 
 import { syncPendingQuizSubmissions } from './indexedDBService';
 
+const parseHostList = (value) => {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+  } catch {
+    // Ignore JSON parse errors and fallback to CSV parsing.
+  }
+
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const resolveMediaConfig = () => {
+  const mediaPublicPath =
+    import.meta.env.VITE_SW_MEDIA_PUBLIC_PATH ||
+    import.meta.env.VITE_MEDIA_PUBLIC_PATH ||
+    '/uploads';
+
+  const mediaCacheHosts = parseHostList(
+    import.meta.env.VITE_SW_MEDIA_CACHE_HOSTS ||
+      import.meta.env.VITE_MEDIA_CACHE_HOSTS ||
+      ''
+  );
+
+  return {
+    mediaPublicPath,
+    mediaCacheHosts
+  };
+};
+
 /**
  * Register service worker
  */
@@ -18,6 +54,32 @@ export async function registerServiceWorker() {
       
       console.log('✅ Service Worker registered:', registration.scope);
       
+      const postMediaConfig = () => {
+        const config = resolveMediaConfig();
+
+        if (registration.active) {
+          registration.active.postMessage({
+            type: 'SET_MEDIA_CONFIG',
+            payload: config
+          });
+          return;
+        }
+
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SET_MEDIA_CONFIG',
+            payload: config
+          });
+        }
+      };
+
+      await navigator.serviceWorker.ready;
+      postMediaConfig();
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        postMediaConfig();
+      });
+
       // Handle updates
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;

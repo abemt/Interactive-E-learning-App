@@ -152,7 +152,9 @@ function YoungLearnerStandardQuizUI({
         </div>
       </div>
 
-      <h2 className="text-3xl font-black leading-tight text-slate-900">{question.questionText}</h2>
+      <h2 className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl">
+        {question.questionText}
+      </h2>
       <p className="mt-2 text-sm font-medium text-slate-600">
         Pick the best answer. Keep an eye on the timer.
       </p>
@@ -172,7 +174,7 @@ function YoungLearnerStandardQuizUI({
         </div>
       )}
 
-      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {question.options.map((option, index) => {
           const isSelected = selectedIndex === index;
           const showCorrect = feedbackState === 'correct' && isSelected;

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FIDEL_ACCENT_STYLES, FIDEL_FAMILIES } from './fidelLibrary';
 import { playPronunciationClip } from './pronunciationPlayer';
+import useOnlineStatus from '../../hooks/useOnlineStatus';
 
 function FidelChart({ onBack }) {
   const navigate = useNavigate();
@@ -10,18 +11,28 @@ function FidelChart({ onBack }) {
   const [selectedLetter, setSelectedLetter] = useState(() => FIDEL_FAMILIES[0]?.letters?.[0] || null);
   const [playingLetterId, setPlayingLetterId] = useState(null);
   const [showAllFamilies, setShowAllFamilies] = useState(false);
+  const isOnline = useOnlineStatus();
 
-  const selectedFamily =
-    FIDEL_FAMILIES.find((family) => family.id === selectedLetter?.familyId) || FIDEL_FAMILIES[0] || null;
-  const selectedAccent = FIDEL_ACCENT_STYLES[selectedFamily?.accent] || FIDEL_ACCENT_STYLES.cyan;
-  const handleBack = () => {
+  const selectedFamily = useMemo(
+    () =>
+      FIDEL_FAMILIES.find((family) => family.id === selectedLetter?.familyId) ||
+      FIDEL_FAMILIES[0] ||
+      null,
+    [selectedLetter]
+  );
+  const selectedAccent = useMemo(
+    () => FIDEL_ACCENT_STYLES[selectedFamily?.accent] || FIDEL_ACCENT_STYLES.cyan,
+    [selectedFamily]
+  );
+
+  const handleBack = useCallback(() => {
     if (typeof onBack === 'function') {
       onBack();
       return;
     }
 
     navigate('/student/dashboard');
-  };
+  }, [navigate, onBack]);
 
   useEffect(() => {
     return () => {
@@ -38,7 +49,7 @@ function FidelChart({ onBack }) {
     };
   }, []);
 
-  const handleLetterClick = (letter) => {
+  const handleLetterClick = useCallback((letter) => {
     playbackTokenRef.current += 1;
     const playbackToken = playbackTokenRef.current;
 
@@ -62,7 +73,7 @@ function FidelChart({ onBack }) {
         }
       }
     });
-  };
+  }, []);
 
   if (!selectedLetter || !selectedFamily) {
     return null;
@@ -70,7 +81,7 @@ function FidelChart({ onBack }) {
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
-      <main className="mx-auto max-w-7xl space-y-5">
+      <main className="container-fluid space-y-5">
         <div className="flex items-center justify-start">
           <button
             type="button"
@@ -82,6 +93,12 @@ function FidelChart({ onBack }) {
             Back
           </button>
         </div>
+
+        {!isOnline && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+            Offline mode: pronunciations will fall back to device speech if audio files are unavailable.
+          </div>
+        )}
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -100,7 +117,7 @@ function FidelChart({ onBack }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:flex sm:flex-wrap sm:justify-end">
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">34 families</span>
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">7 orders</span>
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Tap to hear</span>
@@ -127,7 +144,7 @@ function FidelChart({ onBack }) {
           </div>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {selectedFamily.letters.map((letter) => {
             const accentStyles = FIDEL_ACCENT_STYLES[selectedFamily.accent] || FIDEL_ACCENT_STYLES.cyan;
             const isSelected = selectedLetter.id === letter.id;
@@ -194,7 +211,7 @@ function FidelChart({ onBack }) {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
+                    <div className="grid grid-cols-3 gap-2 p-4 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-7">
                       {family.letters.map((letter) => {
                         const isSelected = selectedLetter.id === letter.id;
                         const isPlaying = playingLetterId === letter.id;

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { playPronunciationClip } from './pronunciationPlayer';
+import useOnlineStatus from '../../hooks/useOnlineStatus';
 
 const NUMERACY_ACCENTS = ['cyan', 'amber', 'emerald', 'rose', 'violet'];
 
@@ -110,8 +111,12 @@ function NumeracyGrid({ onBack }) {
   const playbackTokenRef = useRef(0);
   const [selectedNumber, setSelectedNumber] = useState(() => NUMERACY_ITEMS[0]);
   const [playingNumberId, setPlayingNumberId] = useState(null);
+  const isOnline = useOnlineStatus();
 
-  const selectedAccent = NUMERACY_ACCENT_STYLES[selectedNumber.accent] || NUMERACY_ACCENT_STYLES.cyan;
+  const selectedAccent = useMemo(
+    () => NUMERACY_ACCENT_STYLES[selectedNumber.accent] || NUMERACY_ACCENT_STYLES.cyan,
+    [selectedNumber]
+  );
 
   useEffect(() => {
     return () => {
@@ -128,16 +133,16 @@ function NumeracyGrid({ onBack }) {
     };
   }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (typeof onBack === 'function') {
       onBack();
       return;
     }
 
     navigate('/student/dashboard');
-  };
+  }, [navigate, onBack]);
 
-  const handleNumberClick = (item) => {
+  const handleNumberClick = useCallback((item) => {
     playbackTokenRef.current += 1;
     const playbackToken = playbackTokenRef.current;
 
@@ -161,11 +166,11 @@ function NumeracyGrid({ onBack }) {
         }
       }
     });
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
-      <main className="mx-auto max-w-7xl space-y-5">
+      <main className="container-fluid space-y-5">
         <div className="flex items-center justify-start">
           <button
             type="button"
@@ -177,6 +182,12 @@ function NumeracyGrid({ onBack }) {
             Back
           </button>
         </div>
+
+        {!isOnline && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+            Offline mode: pronunciation will fall back to device speech when audio is unavailable.
+          </div>
+        )}
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -195,7 +206,7 @@ function NumeracyGrid({ onBack }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:flex sm:flex-wrap sm:justify-end">
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">20 numbers</span>
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Tap to hear</span>
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Learn by play</span>
@@ -219,7 +230,7 @@ function NumeracyGrid({ onBack }) {
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           {NUMERACY_ITEMS.map((item) => {
             const accentStyles = NUMERACY_ACCENT_STYLES[item.accent] || NUMERACY_ACCENT_STYLES.cyan;
             const isSelected = selectedNumber.id === item.id;

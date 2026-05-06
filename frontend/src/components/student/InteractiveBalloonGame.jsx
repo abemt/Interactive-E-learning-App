@@ -197,7 +197,7 @@ function InteractiveBalloonGame({
         </div>
       )}
 
-      <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-white/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(255,255,255,0.65)_45%,_rgba(186,230,253,0.28)_100%)] p-4 shadow-inner">
+      <div className="relative min-h-[320px] overflow-hidden rounded-[2rem] border border-white/70 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(255,255,255,0.65)_45%,_rgba(186,230,253,0.28)_100%)] p-3 shadow-inner sm:min-h-[420px] sm:p-4">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.35)_0%,rgba(255,255,255,0)_28%)]" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0)_0%,rgba(125,211,252,0.18)_100%)]" />
         <div className="pointer-events-none absolute left-10 top-8 h-10 w-24 rounded-full bg-white/60 blur-lg" />
@@ -231,7 +231,7 @@ function InteractiveBalloonGame({
                 disabled={isLocked}
                 onClick={() => handleBalloonClick(option, index)}
                 aria-label={`Answer option ${String.fromCharCode(65 + index)}: ${option}`}
-                className={`balloon-button relative flex min-h-28 min-w-28 max-w-[9rem] flex-col items-center justify-center rounded-full bg-gradient-to-br ${balloonPalette[index % balloonPalette.length]} px-5 py-5 text-center text-white shadow-[0_18px_30px_rgba(15,23,42,0.15)] transition duration-300 hover:scale-105 hover:shadow-[0_24px_40px_rgba(15,23,42,0.22)] focus:outline-none focus:ring-4 focus:ring-white/70 disabled:cursor-not-allowed disabled:opacity-70 ${stateClass}`}
+                className={`balloon-button relative flex min-h-24 min-w-24 max-w-[9rem] flex-col items-center justify-center rounded-full bg-gradient-to-br ${balloonPalette[index % balloonPalette.length]} px-4 py-4 text-center text-white shadow-[0_18px_30px_rgba(15,23,42,0.15)] transition duration-300 hover:scale-105 hover:shadow-[0_24px_40px_rgba(15,23,42,0.22)] focus:outline-none focus:ring-4 focus:ring-white/70 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-28 sm:min-w-28 sm:px-5 sm:py-5 ${stateClass}`}
                 style={{
                   animationDelay: `${floatDelay}s`
                 }}

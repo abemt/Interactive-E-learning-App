@@ -4,6 +4,7 @@ import { savePracticeAttemptOffline } from '../../services/indexedDBService';
 import { FIDEL_FAMILIES } from './fidelLibrary';
 import { NUMERACY_PRACTICE_QUESTIONS } from './practiceQuizData';
 import YoungLearnerStandardQuizUI from './YoungLearnerStandardQuizUI';
+import useOnlineStatus from '../../hooks/useOnlineStatus';
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 
@@ -223,6 +224,7 @@ function PracticeQuiz({ moduleId, moduleTitle, variant }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
+  const isOnline = useOnlineStatus();
 
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentQuestionIndex] || null;
@@ -434,6 +436,12 @@ function PracticeQuiz({ moduleId, moduleTitle, variant }) {
           {isComplete ? 'Complete' : `Question ${currentQuestionIndex + 1} of ${totalQuestions}`}
         </div>
       </div>
+
+      {!isOnline && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+          Offline mode: your practice answers are saved on this device.
+        </div>
+      )}
 
       {isComplete ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">

@@ -135,7 +135,7 @@ function StandardQuizUI({
       <div className="pointer-events-none absolute -right-12 bottom-12 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
 
       <div className="relative mb-6 rounded-3xl border border-white/15 bg-slate-900/65 p-4 text-white backdrop-blur-sm">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200/85">Quiz Progress</p>
             <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-700/80">
@@ -183,7 +183,9 @@ function StandardQuizUI({
         </div>
       </div>
 
-      <h2 className="relative mb-4 text-3xl font-black leading-tight text-white">{question.questionText}</h2>
+      <h2 className="relative mb-4 text-2xl font-black leading-tight text-white sm:text-3xl">
+        {question.questionText}
+      </h2>
 
       {imageUrl && (
         <img
@@ -200,7 +202,7 @@ function StandardQuizUI({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {question.options.map((option, index) => {
           const isSelected = selectedIndex === index;
           const showCorrect = feedbackState === 'correct' && isSelected;
